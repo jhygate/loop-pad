@@ -1,0 +1,16 @@
+<div class="recorder-controls">
+  <button (click)="startRecording()">🎙️ Start Recording</button>
+  <button (click)="stopRecording()">⏹️ Stop Recording</button>
+</div>
+
+<div class="recordings-list">
+  <h3>Recordings</h3>
+  <ul>
+    @for (key of recordingKeys; track key) {
+    <li>
+      {{ key }}
+      <button (click)="playRecording(key)">▶️ Play</button>
+    </li>
+    }
+  </ul>
+</div>

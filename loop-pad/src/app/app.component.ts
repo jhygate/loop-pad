@@ -1,8 +1,10 @@
 import { Component } from '@angular/core';
 
+import { AudioFunComponent } from './components/audio-fun/audio-fun.component';
+
 @Component({
   selector: 'app-root',
-  imports: [],
+  imports: [AudioFunComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
