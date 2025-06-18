@@ -16,9 +16,12 @@
 </div> -->
 
 <div
+  (click)="toggleRecording()"
   class="w-[100px] h-[100px] m-[5px] flex justify-center bg-amber-400 rounded-xl drop-shadow-lg"
 >
   <div
     class="w-[20px] h-[5px] mt-[10px] bg-green-300 rounded-xl border border-black"
   ></div>
+  @if (is_recording) { Recording... } @if (!is_recording && recording != null) {
+  Play } @if (!is_recording && recording == null) { Record something }
 </div>

@@ -9,13 +9,28 @@ import { Component } from '@angular/core';
 export class AudioFunComponent {
   mediaRecorder!: MediaRecorder;
   chunks: Blob[] = [];
-  recordings: { [key: string]: Blob } = {};
-  currentId = 0;
+  public is_recording: boolean = false;
+  public recording: Blob | null = null;
 
-  async startRecording() {
+  public async toggleRecording() {
+    console.log(this.is_recording);
+    if (this.is_recording) {
+      this.stopRecording();
+    } else {
+      if (this.recording !== null) {
+        this.playRecording();
+      } else {
+        await this.startRecording();
+      }
+    }
+  }
+
+  public async startRecording() {
+    console.log('Starting recording...');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.mediaRecorder = new MediaRecorder(stream);
     this.chunks = [];
+    this.is_recording = true;
 
     this.mediaRecorder.ondataavailable = (e) => {
       this.chunks.push(e.data);
@@ -23,8 +38,7 @@ export class AudioFunComponent {
 
     this.mediaRecorder.onstop = () => {
       const blob = new Blob(this.chunks, { type: 'audio/webm' });
-      const key = `Recording ${++this.currentId}`;
-      this.recordings[key] = blob;
+      this.recording = blob;
     };
 
     this.mediaRecorder.start();
@@ -32,14 +46,11 @@ export class AudioFunComponent {
 
   stopRecording() {
     this.mediaRecorder.stop();
+    this.is_recording = false;
   }
 
-  playRecording(key: string) {
-    const audio = new Audio(URL.createObjectURL(this.recordings[key]));
+  playRecording() {
+    const audio = new Audio(URL.createObjectURL(this.recording!));
     audio.play();
-  }
-
-  get recordingKeys(): string[] {
-    return Object.keys(this.recordings);
   }
 }
