@@ -1,5 +1,7 @@
 import { Component } from '@angular/core';
 
+type RecorderState = 'empty' | 'recording' | 'ready_to_play' | 'playing';
+
 @Component({
   selector: 'app-audio-fun',
   imports: [],
@@ -9,28 +11,27 @@ import { Component } from '@angular/core';
 export class AudioFunComponent {
   mediaRecorder!: MediaRecorder;
   chunks: Blob[] = [];
-  public is_recording: boolean = false;
   public recording: Blob | null = null;
 
+  public state: RecorderState = 'empty';
+
   public async toggleRecording() {
-    console.log(this.is_recording);
-    if (this.is_recording) {
+    if (this.state === 'empty') {
+      this.startRecording();
+      this.state = 'recording';
+    } else if (this.state === 'recording') {
       this.stopRecording();
-    } else {
-      if (this.recording !== null) {
-        this.playRecording();
-      } else {
-        await this.startRecording();
-      }
+      this.state = 'ready_to_play';
+    } else if (this.state === 'ready_to_play') {
+      this.playRecording();
+      this.state = 'playing';
     }
   }
 
   public async startRecording() {
-    console.log('Starting recording...');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.mediaRecorder = new MediaRecorder(stream);
     this.chunks = [];
-    this.is_recording = true;
 
     this.mediaRecorder.ondataavailable = (e) => {
       this.chunks.push(e.data);
@@ -46,7 +47,6 @@ export class AudioFunComponent {
 
   stopRecording() {
     this.mediaRecorder.stop();
-    this.is_recording = false;
   }
 
   playRecording() {

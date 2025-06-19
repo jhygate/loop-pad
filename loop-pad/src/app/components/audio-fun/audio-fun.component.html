@@ -22,6 +22,14 @@
   <div
     class="w-[20px] h-[5px] mt-[10px] bg-green-300 rounded-xl border border-black"
   ></div>
-  @if (is_recording) { Recording... } @if (!is_recording && recording != null) {
-  Play } @if (!is_recording && recording == null) { Record something }
+
+  @switch (state) { @case ('empty') {
+  <div class="text-center text-black">Click to record</div>
+  } @case ('recording') {
+  <div class="text-center text-black">Recording...</div>
+  } @case ('ready_to_play') {
+  <div class="text-center text-black">Ready to play</div>
+  } @case ('playing') {
+  <div class="text-center text-black">Playing...</div>
+  } }
 </div>
