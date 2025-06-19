@@ -9,6 +9,10 @@ type RecorderState = 'empty' | 'recording' | 'ready_to_play' | 'playing';
   styleUrl: './audio-fun.component.css',
 })
 export class AudioFunComponent {
+  private audio!: HTMLAudioElement;
+  public currentTime = 0;
+  public duration = 0;
+
   mediaRecorder!: MediaRecorder;
   chunks: Blob[] = [];
   public recording: Blob | null = null;
@@ -49,8 +53,24 @@ export class AudioFunComponent {
     this.mediaRecorder.stop();
   }
 
-  playRecording() {
-    const audio = new Audio(URL.createObjectURL(this.recording!));
-    audio.play();
+  public playRecording() {
+    // build the URL and the Audio element
+    const url = URL.createObjectURL(this.recording!);
+    this.audio = new Audio(url);
+    // once metadata loads we know the duration
+    this.audio.addEventListener('loadedmetadata', () => {
+      this.duration = this.audio.duration;
+    });
+    // update currentTime on every tick
+    this.audio.addEventListener('timeupdate', () => {
+      this.currentTime = this.audio.currentTime;
+    });
+    // when it ends, flip state back
+    this.audio.addEventListener('ended', () => {
+      this.state = 'ready_to_play';
+    });
+
+    this.state = 'playing';
+    this.audio.play();
   }
 }
