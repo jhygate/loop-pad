@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
+import { clsx } from 'clsx';
 
 type RecorderState = 'empty' | 'recording' | 'ready_to_play' | 'playing';
 
@@ -9,6 +10,8 @@ type RecorderState = 'empty' | 'recording' | 'ready_to_play' | 'playing';
   styleUrl: './audio-fun.component.css',
 })
 export class AudioFunComponent {
+  public readonly clsx = clsx;
+
   private audio!: HTMLAudioElement;
   public currentTime = 0;
   public duration = 0;
@@ -54,23 +57,62 @@ export class AudioFunComponent {
   }
 
   public playRecording() {
-    // build the URL and the Audio element
-    const url = URL.createObjectURL(this.recording!);
-    this.audio = new Audio(url);
-    // once metadata loads we know the duration
+    if (!this.recording) return;
+
+    this.startAnimation();
+
+    const url = URL.createObjectURL(this.recording);
+    this.audio = new Audio();
+
     this.audio.addEventListener('loadedmetadata', () => {
-      this.duration = this.audio.duration;
+      if (isFinite(this.audio.duration)) {
+        this.duration = this.audio.duration;
+        this.audio.play();
+      } else {
+        // Sometimes metadata isn't ready yet. Use a fallback.
+        this.audio.addEventListener('durationchange', () => {
+          if (isFinite(this.audio.duration)) {
+            this.duration = this.audio.duration;
+          }
+        });
+        this.audio.play();
+      }
+
+      this.state = 'playing';
     });
-    // update currentTime on every tick
+
     this.audio.addEventListener('timeupdate', () => {
       this.currentTime = this.audio.currentTime;
     });
-    // when it ends, flip state back
+
     this.audio.addEventListener('ended', () => {
       this.state = 'ready_to_play';
+      URL.revokeObjectURL(url);
     });
 
-    this.state = 'playing';
-    this.audio.play();
+    this.audio.src = url;
+  }
+
+  private startTime = 0;
+  private animationFrame: number | null = null;
+
+  progress = signal(0);
+
+  private startAnimation() {
+    this.progress.set(0);
+    this.startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - this.startTime;
+      const percent = Math.min((elapsed / this.duration) * 100, 100);
+      this.progress.set(percent);
+
+      if (percent < 100) {
+        this.animationFrame = requestAnimationFrame(animate);
+      }
+    };
+
+    this.animationFrame && cancelAnimationFrame(this.animationFrame);
+    this.animationFrame = requestAnimationFrame(animate);
   }
 }
