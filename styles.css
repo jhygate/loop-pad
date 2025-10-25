@@ -1,0 +1,53 @@
+.recorder {
+  border-radius: 25px;
+  background-color: #73ad21;
+  padding: 20px;
+  width: 150px;
+  height: 150px;
+  filter: drop-shadow(-4px 4px);
+  border: solid;
+  position: relative;
+  overflow: hidden;
+  margin: 10px;
+}
+
+.recorder::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  background-color: rgba(220, 38, 38, 0.6);
+  transition: width 0s;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.recorder.holding::before {
+  width: 100%;
+  transition: width 500ms linear 100ms;
+}
+
+.recorder::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  background-color: rgba(34, 197, 94, 0.6);
+  transition: width 0s;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.recorder.playing::after {
+  width: 100%;
+  transition: width var(--play-duration, 1000ms) linear;
+}
+
+.recorder-container {
+  display: grid;
+  grid-template-columns: auto auto auto;
+}
