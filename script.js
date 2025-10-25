@@ -15,6 +15,8 @@ class Recorder {
     this.progressTimer = null;
 
     this.loop = false;
+    this.startTime = undefined;
+    this.position = 0;
 
     this.loop_setting = loop;
     this._bindUI();
@@ -137,11 +139,12 @@ class Recorder {
         break;
 
       case "playing":
-        console.log(this.clickCount, this.loop_setting);
+        console.log((this.ctx.currentTime - this.startTime)/this.trimmedBuffer.duration);
         if (this.loop_setting && this.clickCount == 2) {
           this.loop = !this.loop;
         }
         else{
+          
           this._play();
 
 
@@ -184,6 +187,7 @@ class Recorder {
 
     src.start();
     this.src = src;
+    this.startTime = this.ctx.currentTime
 
     src.onended = () => {
       if (this.loop) {
