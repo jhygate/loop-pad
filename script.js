@@ -1,6 +1,45 @@
-HOLD_TO_DELETE_TIME = 600;
+HOLD_TO_DELETE_TIME = 3600;
+
+
+function getTimeToStart(){
+  const thresh = 60000; //ms
+  console.log(Recorder.instances, "ALL RECORDERS")
+
+ playingTracks = Recorder.instances.filter(r => r.recordingState === "playing" && r.loop === true);
+
+ console.log(playingTracks, "PLAYING TRACKS")
+
+ timeToStarts = []
+ for (const recorder of playingTracks){
+    timeToStart = recorder.trackLength - recorder.currentTime;
+    timeSinceStart = recorder.ctx.currentTime - recorder.startTime;
+
+    console.log({timeToStart, timeSinceStart}, "TIMES")
+
+    if (timeSinceStart <= timeToStart) {
+      timeToStarts.push(0-timeSinceStart);
+    } else {
+      timeToStarts.push(timeToStart)
+    }
+
+ }
+  const filtered = timeToStarts.filter(t => Math.abs(t) < thresh);
+
+  console.log(filtered, "FILTERED")
+
+  if (filtered.length === 0) return null; // or return null if you prefer
+
+  console.log(Math.min(...filtered));
+
+  return Math.min(...filtered);
+}
 class Recorder {
+
+  static instances = []
+
   constructor(buttonId, key, settings = { loop: false, restart: true }) {
+    Recorder.instances.push(this);
+
     //Public
     this.recordingState = "not-recording";
     this.startTime = undefined;
@@ -29,13 +68,17 @@ class Recorder {
     return this.trimmedBuffer.duration;
   }
 
+  get currentTime() {
+    return this.ctx.currentTime - this.startTime;
+  }
+
   _bindUI() {
     this.button.addEventListener("pointerdown", () => this._onPointerDown());
     this.button.addEventListener("pointerup", () => this._onPointerUp());
     this.button.style.setProperty("--delete-time", `${HOLD_TO_DELETE_TIME}ms`);
 
     document.addEventListener("keydown", (e) => this._onKeyDown(e));
-    document.addEventListener("keyup", (e) => this._onKeyUp(e));
+    document.addEventListener("keyup", (e) => this._onKeyUp(e));  
   }
 
   _onKeyDown(e) {
@@ -72,12 +115,13 @@ class Recorder {
       type: "audio/mp4;",
     }).arrayBuffer();
     const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-    // this.trimmedBuffer = trimBuffer(audioBuffer, this.ctx, 0.1);
-    this.trimmedBuffer = audioBuffer;
+    this.trimmedBuffer = trimBuffer(audioBuffer, this.ctx, 0.1);
+    // this.trimmedBuffer = audioBuffer;
     this.chunks = [];
   }
 
   _onPointerDown() {
+    this.resetting = false;
     this.clickCount += 1;
     console.log(this.clickCount);
     this._holdTimer = setTimeout(
@@ -105,7 +149,7 @@ class Recorder {
       this.resetting = false;
       return;
     }
-
+  
     this.handleButtonPress();
   }
 
@@ -138,7 +182,33 @@ class Recorder {
     this.mediaRecorder.stop();
   }
 
-  _playAudio() {
+  _setupAudioPlay() {
+    const timeToStart = getTimeToStart();
+
+    console.log(timeToStart, "TIME TO START");
+    if (timeToStart == null || timeToStart === 0){
+      this._startAudio();
+    }
+
+    if (timeToStart > 0){
+      console.log("WAITING")
+      setTimeout(() => {
+        this._startAudio();
+      }, timeToStart*1000);
+    }
+
+    // if (timeToStart < 0){
+
+    // }
+
+
+    
+  }
+
+  _startAudio() {
+
+    console.log("STARTED")
+
     this.recordingState = "playing";
     this.button.innerHTML = "Playing";
 
@@ -167,11 +237,12 @@ class Recorder {
     src.onended = () => {
       if (this.loop) {
         this._stopAudio();
-        this._playAudio();
+        this._startAudio();
       } else {
-        this._stopAudio();
+        this._endAudio();
       }
     };
+
   }
 
   _stopAudio() {
@@ -185,28 +256,29 @@ class Recorder {
       } catch (_) {}
       this.src = null;
     }
-    this.button.innerHTML = "Played";
-    this.recordingState = "recorded";
     this.button.classList.remove("playing");
   }
 
+  _endAudio() {
+    this._stopAudio()
+    this.button.innerHTML = "Played";
+    this.recordingState = "recorded";
+  }
+
   handleButtonPress() {
-    console.log(this.recordingState);
+    console.log(this.recordingState, "HANDLE BUTTON PRESS");
     switch (this.recordingState) {
       case "not-recording":
         this._startRecording();
         break;
 
       case "recording":
-        this._stopAudio();
+        this._endAudio();
         this._stopRecording();
         break;
 
       case "recorded":
-        this.recordingState = "playing";
-        this.button.innerHTML = "Playing";
-
-        this._playAudio();
+        this._setupAudioPlay();
         break;
 
       case "playing":
@@ -214,10 +286,10 @@ class Recorder {
           console.log(this.clickCount, "click");
           if (this.settings["restart"] === true) {
             this._stopAudio();
-            this._playAudio();
+            this._setupAudioPlay();
           }
           if (this.settings["restart"] === false){
-            this._stopAudio();
+            this._endAudio();
             this.loop = false
 
           }
@@ -231,7 +303,7 @@ class Recorder {
   }
 }
 
-const recorder1 = new Recorder("btn1", "q", { loop: true, restart: true });
+const recorder1 = new Recorder("btn1", "q", { loop: true, restart: false });
 const recorder2 = new Recorder("btn2", "w");
 const recorder3 = new Recorder("btn3", "e");
 
@@ -242,3 +314,17 @@ const recorder6 = new Recorder("btn6", "d");
 const recorder7 = new Recorder("btn7", "z", { loop: true, restart: false });
 const recorder8 = new Recorder("btn8", "x");
 const recorder9 = new Recorder("btn9", "c");
+
+const recorders = [
+  recorder1,
+  recorder2,
+  recorder3,
+  recorder4,
+  recorder5,
+  recorder6,
+  recorder7,
+  recorder8,
+  recorder9,
+];
+
+
