@@ -1,41 +1,34 @@
-HOLD_TO_DELETE_TIME = 3600;
+HOLD_TO_DELETE_TIME = 600;
+TRIM_THRESH = 0.2;
+SYNC_THRESH = 200000;
 
-
-function getTimeToStart(){
-  const thresh = 60000; //ms
-  console.log(Recorder.instances, "ALL RECORDERS")
-
- playingTracks = Recorder.instances.filter(r => r.recordingState === "playing" && r.loop === true);
-
- console.log(playingTracks, "PLAYING TRACKS")
-
- timeToStarts = []
- for (const recorder of playingTracks){
+function getTimeToStart() {
+  playingTracks = Recorder.instances.filter(
+    (r) => r.recordingState === "playing" && r.loop === true
+  );
+  timeToStarts = [];
+  for (const recorder of playingTracks) {
     timeToStart = recorder.trackLength - recorder.currentTime;
     timeSinceStart = recorder.ctx.currentTime - recorder.startTime;
-
-    console.log({timeToStart, timeSinceStart}, "TIMES")
-
     if (timeSinceStart <= timeToStart) {
-      timeToStarts.push(0-timeSinceStart);
-    } else {
-      timeToStarts.push(timeToStart)
+      timeToStarts.push(0 - timeSinceStart);
+    } else{
+      timeToStarts.push(timeToStart);
     }
+  }
+  console.log(playingTracks)
+  console.log(timeToStarts)
+  const filtered = timeToStarts.filter((t) => Math.abs(t) * 1000 < SYNC_THRESH);
 
- }
-  const filtered = timeToStarts.filter(t => Math.abs(t) < thresh);
+  console.log(filtered, "FILTERED");
+  if (filtered.length === 0) return null;
 
-  console.log(filtered, "FILTERED")
-
-  if (filtered.length === 0) return null; // or return null if you prefer
-
-  console.log(Math.min(...filtered));
-
-  return Math.min(...filtered);
+  smallestAbs = filtered.reduce((a, b) => (Math.abs(a) < Math.abs(b) ? a : b));
+  console.log(smallestAbs);
+  return smallestAbs;
 }
 class Recorder {
-
-  static instances = []
+  static instances = [];
 
   constructor(buttonId, key, settings = { loop: false, restart: true }) {
     Recorder.instances.push(this);
@@ -78,7 +71,7 @@ class Recorder {
     this.button.style.setProperty("--delete-time", `${HOLD_TO_DELETE_TIME}ms`);
 
     document.addEventListener("keydown", (e) => this._onKeyDown(e));
-    document.addEventListener("keyup", (e) => this._onKeyUp(e));  
+    document.addEventListener("keyup", (e) => this._onKeyUp(e));
   }
 
   _onKeyDown(e) {
@@ -115,7 +108,7 @@ class Recorder {
       type: "audio/mp4;",
     }).arrayBuffer();
     const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-    this.trimmedBuffer = trimBuffer(audioBuffer, this.ctx, 0.1);
+    this.trimmedBuffer = trimBuffer(audioBuffer, this.ctx, TRIM_THRESH);
     // this.trimmedBuffer = audioBuffer;
     this.chunks = [];
   }
@@ -149,7 +142,7 @@ class Recorder {
       this.resetting = false;
       return;
     }
-  
+
     this.handleButtonPress();
   }
 
@@ -183,66 +176,63 @@ class Recorder {
   }
 
   _setupAudioPlay() {
-    const timeToStart = getTimeToStart();
+    const offset = getTimeToStart();
 
-    console.log(timeToStart, "TIME TO START");
-    if (timeToStart == null || timeToStart === 0){
-      this._startAudio();
+    console.log(offset, "TIME TO START");
+    if (offset == null || offset === 0) {
+      this._startAudio(0);
     }
-
-    if (timeToStart > 0){
-      console.log("WAITING")
-      setTimeout(() => {
-        this._startAudio();
-      }, timeToStart*1000);
-    }
-
-    // if (timeToStart < 0){
-
-    // }
-
-
-    
+    this._startAudio(offset);
   }
 
-  _startAudio() {
+  _startAudio(offset) {
+    let delay = 0;
+    let trim = 0;
+    if (offset < 0) {
+      delay = 0;
+      trim = 0 - offset;
+    } else {
+      delay = offset;
+      trim = 0;
+    }
 
-    console.log("STARTED")
+    this._holdTimer = setTimeout(() => {
+      console.log("STARTED");
 
-    this.recordingState = "playing";
-    this.button.innerHTML = "Playing";
+      this.recordingState = "playing";
+      this.button.innerHTML = "Playing";
 
-    if (!this.trimmedBuffer || !this.ctx) return;
+      if (!this.trimmedBuffer || !this.ctx) return;
 
-    const src = this.ctx.createBufferSource();
-    src.buffer = this.trimmedBuffer;
-    src.connect(this.ctx.destination);
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.trimmedBuffer;
+      src.connect(this.ctx.destination);
 
-    // Remove playing class first
-    this.button.classList.remove("playing");
-    const duration = this.trimmedBuffer.duration * 1000;
-    this.button.style.setProperty("--play-duration", `${duration}ms`);
+      // Remove playing class first
+      this.button.classList.remove("playing");
+      const duration = (this.trimmedBuffer.duration - trim) * 1000;
+      this.button.style.setProperty("--play-duration", `${duration}ms`);
 
-    // Use requestAnimationFrame to ensure the removal is processed
-    requestAnimationFrame(() => {
+      // Use requestAnimationFrame to ensure the removal is processed
       requestAnimationFrame(() => {
-        this.button.classList.add("playing");
+        requestAnimationFrame(() => {
+          this.button.classList.add("playing");
+        });
       });
-    });
 
-    src.start();
-    this.src = src;
-    this.startTime = this.ctx.currentTime;
+      src.start(0, trim);
+      this.src = src;
+      this.startTime = this.ctx.currentTime;
 
-    src.onended = () => {
-      if (this.loop) {
-        this._stopAudio();
-        this._startAudio();
-      } else {
-        this._endAudio();
-      }
-    };
-
+      src.onended = () => {
+        if (this.loop) {
+          this._stopAudio();
+          this._startAudio(0);
+        } else {
+          this._endAudio();
+        }
+      };
+    }, delay*1000);
   }
 
   _stopAudio() {
@@ -260,7 +250,7 @@ class Recorder {
   }
 
   _endAudio() {
-    this._stopAudio()
+    this._stopAudio();
     this.button.innerHTML = "Played";
     this.recordingState = "recorded";
   }
@@ -288,10 +278,9 @@ class Recorder {
             this._stopAudio();
             this._setupAudioPlay();
           }
-          if (this.settings["restart"] === false){
+          if (this.settings["restart"] === false) {
             this._endAudio();
-            this.loop = false
-
+            this.loop = false;
           }
         }
         if (this.clickCount === 2) {
@@ -326,5 +315,3 @@ const recorders = [
   recorder8,
   recorder9,
 ];
-
-
