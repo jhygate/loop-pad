@@ -2,6 +2,12 @@ HOLD_TO_DELETE_TIME = 600;
 TRIM_THRESH = 0.2;
 SYNC_THRESH = 200000;
 
+
+const recordButton = '<div class="record"></div>'
+const recordingButton = '<div class="record pulsing"></div>'
+const playButton = '<div class="triangle-border"><div class="triangle"></div></div>'
+const playingButton = '<div class="triangle-border pulsing"><div class="triangle pulsing"></div></div>'
+
 function getTimeToStart() {
   playingTracks = Recorder.instances.filter(
     (r) => r.recordingState === "playing" && r.loop === true
@@ -12,12 +18,12 @@ function getTimeToStart() {
     timeSinceStart = recorder.ctx.currentTime - recorder.startTime;
     if (timeSinceStart <= timeToStart) {
       timeToStarts.push(0 - timeSinceStart);
-    } else{
+    } else {
       timeToStarts.push(timeToStart);
     }
   }
-  console.log(playingTracks)
-  console.log(timeToStarts)
+  console.log(playingTracks);
+  console.log(timeToStarts);
   const filtered = timeToStarts.filter((t) => Math.abs(t) * 1000 < SYNC_THRESH);
 
   console.log(filtered, "FILTERED");
@@ -66,6 +72,8 @@ class Recorder {
   }
 
   _bindUI() {
+    this.button.innerHTML = recordButton;
+
     this.button.addEventListener("pointerdown", () => this._onPointerDown());
     this.button.addEventListener("pointerup", () => this._onPointerUp());
     this.button.style.setProperty("--delete-time", `${HOLD_TO_DELETE_TIME}ms`);
@@ -148,7 +156,7 @@ class Recorder {
 
   _resetButton() {
     this.recordingState = "not-recording";
-    this.button.innerHTML = "Record";
+    this.button.innerHTML = recordButton;
 
     this.button.style.setProperty("filter", " drop-shadow(-4px 4px)");
     this.button.classList.remove("holding");
@@ -163,16 +171,24 @@ class Recorder {
   _startRecording() {
     if (!this.mediaRecorder) return;
     this.recordingState = "recording";
-    this.button.innerHTML = "Recording";
+    this.button.innerHTML = recordingButton;
 
     this.mediaRecorder.start();
   }
 
   _stopRecording() {
-    this.recordingState = "recorded";
-    this.button.innerHTML = "Recorded";
+    const offset = getTimeToStart();
 
-    this.mediaRecorder.stop();
+    let stopDelay = 0;
+    if (offset > 0) {
+      stopDelay = offset;
+    }
+
+    setTimeout(() => {
+      this.recordingState = "recorded";
+      this.button.innerHTML = playButton;
+      this.mediaRecorder.stop();
+    }, stopDelay * 1000);
   }
 
   _setupAudioPlay() {
@@ -200,7 +216,7 @@ class Recorder {
       console.log("STARTED");
 
       this.recordingState = "playing";
-      this.button.innerHTML = "Playing";
+      this.button.innerHTML = playingButton;
 
       if (!this.trimmedBuffer || !this.ctx) return;
 
@@ -232,7 +248,7 @@ class Recorder {
           this._endAudio();
         }
       };
-    }, delay*1000);
+    }, delay * 1000);
   }
 
   _stopAudio() {
@@ -251,7 +267,7 @@ class Recorder {
 
   _endAudio() {
     this._stopAudio();
-    this.button.innerHTML = "Played";
+    this.button.innerHTML = playButton;
     this.recordingState = "recorded";
   }
 
