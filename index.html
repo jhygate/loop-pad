@@ -13,6 +13,7 @@
 
   <body>
     <main>
+      <div class="central">
       <div class="recorder-container">
         <div class="recorder" id="btn1"><div class="record"></div></div>
 
@@ -34,8 +35,37 @@
         <div class="recorder" id="btn9">Record</div>
 
       </div>
+      </div>  
+
+      <img src="icons/loop.svg">
+
+      <dialog id="settings">
+        <h1>Settings</h1>
+        <form>
+        <input type="checkbox"> Trim Audio </input><br>
+        <input type="text" style="margin-left: 30px;"> Trim Threshold </input><br>
+        <input type="checkbox" style="margin-left: 30px;"> Trim Start </input><br>
+        <input type="checkbox" style="margin-left: 30px;"> Trim End </input><br>
+        <br>
+        <input type="checkbox"> Loop Sync </input><br>
+        <input type="text" style="margin-left: 30px;">(ms) Sync Threshold </input><br>
+        <input type="checkbox" style="margin-left: 30px;"> Record Sync </input><br>
+        <input type="checkbox" style="margin-left: 60px;"> Sync Start </input><br>
+        <input type="checkbox" style="margin-left: 60px;"> Sync End </input><br>
+        <input type="checkbox" style="margin-left: 30px;"> Play Sync</input><br>
+        <input type="checkbox" style="margin-left: 60px;"> Sync Start </input><br>
+        <input type="checkbox" style="margin-left: 60px;"> Sync End </input><br>
+        <br>
+        <input type="checkbox">Loopable </input><br>
+        Press to  <input type="radio" id="press-option">Stop</input>
+         <input type="radio" id="press-option">Restart</input>
+
+        </form>
+
+
+      </dialog>
 
   </body>
 
-</html>
+</html> 
 

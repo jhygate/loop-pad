@@ -1,12 +1,15 @@
 HOLD_TO_DELETE_TIME = 600;
-TRIM_THRESH = 0.2;
-SYNC_THRESH = 200000;
+TRIM_THRESH = 0.1;
+SYNC_THRESH = 20000;
 
+const recordButton = '<div class="record"></div>';
+const recordingButton = '<div class="record pulsing"></div>';
+const playButton =
+  '<div class="triangle-border"><div class="triangle"></div></div>';
+const playingButton =
+  '<div class="triangle-border pulsing"><div class="triangle pulsing"></div></div>';
 
-const recordButton = '<div class="record"></div>'
-const recordingButton = '<div class="record pulsing"></div>'
-const playButton = '<div class="triangle-border"><div class="triangle"></div></div>'
-const playingButton = '<div class="triangle-border pulsing"><div class="triangle pulsing"></div></div>'
+document.getElementById("settings").showModal();
 
 function getTimeToStart() {
   playingTracks = Recorder.instances.filter(
@@ -52,6 +55,7 @@ class Recorder {
 
     this.mediaRecorder = null; //Recorder object
     this.chunks = []; //Stores audio data
+    this.silenceDuration = 0; //Stores silence to add at the beginning
 
     this.trimmedBuffer = null; //Stores the audio
     this.ctx = null; //Audio Context?
@@ -115,10 +119,33 @@ class Recorder {
     const arrayBuffer = await new Blob(this.chunks, {
       type: "audio/mp4;",
     }).arrayBuffer();
-    const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-    this.trimmedBuffer = trimBuffer(audioBuffer, this.ctx, TRIM_THRESH);
-    // this.trimmedBuffer = audioBuffer;
+    let audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+    audioBuffer = trimBuffer(audioBuffer, this.ctx, TRIM_THRESH);
+
+    // Add silence to the beginning if needed
+    if (this.silenceDuration > 0) {
+      const silenceSamples = Math.floor(this.silenceDuration * this.ctx.sampleRate);
+      const newLength = audioBuffer.length + silenceSamples;
+      const newBuffer = this.ctx.createBuffer(
+        audioBuffer.numberOfChannels,
+        newLength,
+        this.ctx.sampleRate
+      );
+
+      // Copy audio data after the silence
+      for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        const oldData = audioBuffer.getChannelData(channel);
+        const newData = newBuffer.getChannelData(channel);
+        newData.set(oldData, silenceSamples);
+      }
+
+      this.trimmedBuffer = newBuffer;
+    } else {
+      this.trimmedBuffer = audioBuffer;
+    }
+
     this.chunks = [];
+    this.silenceDuration = 0;
   }
 
   _onPointerDown() {
@@ -173,7 +200,21 @@ class Recorder {
     this.recordingState = "recording";
     this.button.innerHTML = recordingButton;
 
-    this.mediaRecorder.start();
+    const offset = getTimeToStart();
+
+    let startDelay = 0;
+    this.silenceDuration = 0;
+    if (offset > 0) {
+      startDelay = offset;
+      this.silenceDuration = 0;
+    }
+    if (offset < 0) {
+      this.silenceDuration = Math.abs(offset);
+    }
+
+    setTimeout(() => {
+      this.mediaRecorder.start();
+    }, startDelay * 1000);
   }
 
   _stopRecording() {
