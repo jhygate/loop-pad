@@ -41,29 +41,29 @@
 
       <dialog id="settings">
         <h1>Settings</h1>
-        <form>
-        <input type="checkbox"> Trim Audio </input><br>
-        <input type="text" style="margin-left: 30px;"> Trim Threshold </input><br>
-        <input type="checkbox" style="margin-left: 30px;"> Trim Start </input><br>
-        <input type="checkbox" style="margin-left: 30px;"> Trim End </input><br>
-        <br>
-        <input type="checkbox"> Loop Sync </input><br>
-        <input type="text" style="margin-left: 30px;">(ms) Sync Threshold </input><br>
-        <input type="checkbox" style="margin-left: 30px;"> Record Sync </input><br>
-        <input type="checkbox" style="margin-left: 60px;"> Sync Start </input><br>
-        <input type="checkbox" style="margin-left: 60px;"> Sync End </input><br>
-        <input type="checkbox" style="margin-left: 30px;"> Play Sync</input><br>
-        <input type="checkbox" style="margin-left: 60px;"> Sync Start </input><br>
-        <input type="checkbox" style="margin-left: 60px;"> Sync End </input><br>
-        <br>
-        <input type="checkbox">Loopable </input><br>
-        Press to  <input type="radio" id="press-option">Stop</input>
-         <input type="radio" id="press-option">Restart</input>
-
+        <form id="settings-form">
+          <input type="checkbox" id="trim-audio"> <label for="trim-audio">Trim Audio</label><br>
+          <input type="text" id="trim-threshold" style="margin-left: 30px;"> <label for="trim-threshold">Trim Threshold</label><br>
+          <input type="checkbox" id="trim-start" style="margin-left: 30px;"> <label for="trim-start">Trim Start</label><br>
+          <input type="checkbox" id="trim-end" style="margin-left: 30px;"> <label for="trim-end">Trim End</label><br>
+          <br>
+          <input type="checkbox" id="loop-sync"> <label for="loop-sync">Loop Sync</label><br>
+          <input type="text" id="sync-threshold" style="margin-left: 30px;"> <label for="sync-threshold">(ms) Sync Threshold</label><br>
+          <input type="checkbox" id="record-sync-start" style="margin-left: 60px;"> <label for="record-sync-start">Sync Start</label><br>
+          <input type="checkbox" id="record-sync-end" style="margin-left: 60px;"> <label for="record-sync-end">Sync End</label><br>
+          <input type="checkbox" id="play-sync-start" style="margin-left: 60px;"> <label for="play-sync-start">Sync Start</label><br>
+          <br>
+          <input type="checkbox" id="loopable"> <label for="loopable">Loopable</label><br>
+          Press to
+          <input type="radio" id="press-option-stop" name="press-option" value="stop"> <label for="press-option-stop">Stop</label>
+          <input type="radio" id="press-option-restart" name="press-option" value="restart"> <label for="press-option-restart">Restart</label>
+          <button id="settings-submit" type="submit">Submit</button>
         </form>
 
 
       </dialog>
+
+      <img src="icons/settings.svg" id="settings-icon"/>
 
   </body>
 

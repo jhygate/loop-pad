@@ -1,5 +1,5 @@
 HOLD_TO_DELETE_TIME = 600;
-TRIM_THRESH = 0.1;
+TRIM_THRESH = 0.05;
 SYNC_THRESH = 20000;
 
 const recordButton = '<div class="record"></div>';
@@ -8,10 +8,18 @@ const playButton =
   '<div class="triangle-border"><div class="triangle"></div></div>';
 const playingButton =
   '<div class="triangle-border pulsing"><div class="triangle pulsing"></div></div>';
+const settingsButtons ='<div><img src="icons/settings.svg"></div>'
 
-document.getElementById("settings").showModal();
+settingsModal = document.getElementById("settings");
+settingsButton = document.getElementById("settings-icon");
 
-function getTimeToStart() {
+settingsRecorder = null;
+
+settingsClicked = false;
+
+
+
+function getTimeToStart(thresh) {
   playingTracks = Recorder.instances.filter(
     (r) => r.recordingState === "playing" && r.loop === true
   );
@@ -27,7 +35,7 @@ function getTimeToStart() {
   }
   console.log(playingTracks);
   console.log(timeToStarts);
-  const filtered = timeToStarts.filter((t) => Math.abs(t) * 1000 < SYNC_THRESH);
+  const filtered = timeToStarts.filter((t) => Math.abs(t) * 1000 < thresh);
 
   console.log(filtered, "FILTERED");
   if (filtered.length === 0) return null;
@@ -39,7 +47,7 @@ function getTimeToStart() {
 class Recorder {
   static instances = [];
 
-  constructor(buttonId, key, settings = { loop: false, restart: true }) {
+  constructor(buttonId, key) {
     Recorder.instances.push(this);
 
     //Public
@@ -56,12 +64,26 @@ class Recorder {
     this.mediaRecorder = null; //Recorder object
     this.chunks = []; //Stores audio data
     this.silenceDuration = 0; //Stores silence to add at the beginning
+    this.endTrim = 0; //Stores trim at the end
 
     this.trimmedBuffer = null; //Stores the audio
     this.ctx = null; //Audio Context?
     this.src = null; //Plays the sound
 
-    this.settings = settings;
+    this.trimAudio = false;
+    this.trimThreshold = TRIM_THRESH;
+    this.trimAudioLeft = false;
+    this.trimAudioRight = false;
+
+    this.loopSync = false;
+    this.syncThreshold = SYNC_THRESH;
+    this.recordSyncStart = false;
+    this.recordSyncEnd = false;
+    this.playSyncStart = false;
+
+    this.loopable = false;
+
+    this.playingPressOption = "stop" //Options "stop" "restart"
 
     this._bindUI();
     this._initMedia();
@@ -74,6 +96,23 @@ class Recorder {
   get currentTime() {
     return this.ctx.currentTime - this.startTime;
   }
+
+  showSettingsIcon() {
+    this.button.innerHTML = settingsButtons;
+  }
+
+  showIcon() {
+    if (this.recordingState === "not-recording") {
+      this.button.innerHTML = recordButton;
+    } else if (this.recordingState === "recording") {
+      this.button.innerHTML = recordingButton;
+    } else if (this.recordingState === "recorded") {
+      this.button.innerHTML = playButton;
+    } else if (this.recordingState === "playing") {
+      this.button.innerHTML = playingButton;
+    }
+  }
+
 
   _bindUI() {
     this.button.innerHTML = recordButton;
@@ -101,7 +140,11 @@ class Recorder {
   async _initMedia() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
         video: false,
       });
       this.mediaRecorder = new MediaRecorder(stream);
@@ -120,11 +163,15 @@ class Recorder {
       type: "audio/mp4;",
     }).arrayBuffer();
     let audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-    audioBuffer = trimBuffer(audioBuffer, this.ctx, TRIM_THRESH);
+    if (this.trimAudio === true) {
+      audioBuffer = trimBuffer(audioBuffer, this.ctx, this.trimThreshold);
+    }
 
     // Add silence to the beginning if needed
     if (this.silenceDuration > 0) {
-      const silenceSamples = Math.floor(this.silenceDuration * this.ctx.sampleRate);
+      const silenceSamples = Math.floor(
+        this.silenceDuration * this.ctx.sampleRate
+      );
       const newLength = audioBuffer.length + silenceSamples;
       const newBuffer = this.ctx.createBuffer(
         audioBuffer.numberOfChannels,
@@ -139,6 +186,26 @@ class Recorder {
         newData.set(oldData, silenceSamples);
       }
 
+      audioBuffer = newBuffer;
+    }
+
+    // Remove audio from the end if needed
+    if (this.endTrim > 0) {
+      const endTrimSamples = Math.floor(this.endTrim * this.ctx.sampleRate);
+      const newLength = audioBuffer.length - endTrimSamples;
+      const newBuffer = this.ctx.createBuffer(
+        audioBuffer.numberOfChannels,
+        newLength,
+        this.ctx.sampleRate
+      );
+
+      // Copy audio data without the end portion
+      for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        const oldData = audioBuffer.getChannelData(channel);
+        const newData = newBuffer.getChannelData(channel);
+        newData.set(oldData.subarray(0, newLength));
+      }
+
       this.trimmedBuffer = newBuffer;
     } else {
       this.trimmedBuffer = audioBuffer;
@@ -146,9 +213,13 @@ class Recorder {
 
     this.chunks = [];
     this.silenceDuration = 0;
+    this.endTrim = 0;
   }
 
   _onPointerDown() {
+    if (settingsClicked) {
+      return;
+    }
     this.resetting = false;
     this.clickCount += 1;
     console.log(this.clickCount);
@@ -168,7 +239,36 @@ class Recorder {
     }
   }
 
-  _onPointerUp() {
+  _onPointerUp(){
+    
+    if (settingsClicked) {
+
+      document.getElementById('trim-audio').checked = this.trimAudio;
+      document.getElementById('trim-threshold').value = this.trimThreshold;
+      document.getElementById('trim-start').checked = this.trimAudioLeft;
+      document.getElementById('trim-end').checked = this.trimAudioRight;
+      
+      document.getElementById('loop-sync').checked = this.loopSync;
+      document.getElementById('sync-threshold').value = this.syncThreshold;
+      document.getElementById('record-sync-start').checked = this.recordSyncStart;
+      document.getElementById('record-sync-end').checked = this.recordSyncEnd;
+      document.getElementById('play-sync-start').checked = this.playSyncStart;
+      
+      document.getElementById('loopable').checked = this.loopable;
+      
+      // Set radio button for playingPressOption
+      if (this.playingPressOption === "stop") {
+        document.getElementById('press-option-stop').checked = true;
+      } else if (this.playingPressOption === "restart") {
+        document.getElementById('press-option-restart').checked = true;
+      }
+
+      settingsRecorder = this;  
+      settingsModal.showModal();
+      settingsClicked = false;
+      return;
+    }
+
     clearTimeout(this._holdTimer);
     this.button.classList.remove("holding");
     this.button.style.setProperty("filter", " drop-shadow(-4px 4px)");
@@ -200,7 +300,7 @@ class Recorder {
     this.recordingState = "recording";
     this.button.innerHTML = recordingButton;
 
-    const offset = getTimeToStart();
+    const offset = getTimeToStart(this.syncThreshold);
 
     let startDelay = 0;
     this.silenceDuration = 0;
@@ -218,11 +318,15 @@ class Recorder {
   }
 
   _stopRecording() {
-    const offset = getTimeToStart();
+    const offset = getTimeToStart(this.syncThreshold);
 
     let stopDelay = 0;
+    this.endTrim = 0;
     if (offset > 0) {
       stopDelay = offset;
+    }
+    if (offset < 0) {
+      this.endTrim = Math.abs(offset);
     }
 
     setTimeout(() => {
@@ -233,7 +337,11 @@ class Recorder {
   }
 
   _setupAudioPlay() {
-    const offset = getTimeToStart();
+    const offset = getTimeToStart(this.syncThreshold);
+
+    if (this.playSyncStart) {
+     offset = 0;
+    }
 
     console.log(offset, "TIME TO START");
     if (offset == null || offset === 0) {
@@ -329,27 +437,27 @@ class Recorder {
         break;
 
       case "playing":
-        if (this.clickCount === 1) {
+        if (this.clickCount === 1 || this.loopable == false) {
           console.log(this.clickCount, "click");
-          if (this.settings["restart"] === true) {
+          if (this.playingPressOption === "restart") {
             this._stopAudio();
             this._setupAudioPlay();
           }
-          if (this.settings["restart"] === false) {
+          if (this.playingPressOption === "stop") {
             this._endAudio();
             this.loop = false;
           }
         }
-        if (this.clickCount === 2) {
+        if (this.clickCount === 2 && this.loopable == true) {
           console.log(this.clickCount, "click");
-          if (this.settings["loop"] == true) this.loop = !this.loop;
+          this.loop = !this.loop;
         }
         break;
     }
   }
 }
 
-const recorder1 = new Recorder("btn1", "q", { loop: true, restart: false });
+const recorder1 = new Recorder("btn1", "q");
 const recorder2 = new Recorder("btn2", "w");
 const recorder3 = new Recorder("btn3", "e");
 
@@ -357,7 +465,7 @@ const recorder4 = new Recorder("btn4", "a");
 const recorder5 = new Recorder("btn5", "s");
 const recorder6 = new Recorder("btn6", "d");
 
-const recorder7 = new Recorder("btn7", "z", { loop: true, restart: false });
+const recorder7 = new Recorder("btn7", "z");
 const recorder8 = new Recorder("btn8", "x");
 const recorder9 = new Recorder("btn9", "c");
 
@@ -372,3 +480,50 @@ const recorders = [
   recorder8,
   recorder9,
 ];
+
+settingsButton.addEventListener("click", () => {
+  settingsClicked = true;
+  for (const recorder of recorders) {
+    recorder.showSettingsIcon();
+  }
+});
+
+// Handle settings form submission
+const settingsForm = document.getElementById('settings-form');
+settingsForm.addEventListener('submit', (e) => {
+  e.preventDefault(); // Prevent page refresh!
+
+  if (!settingsRecorder) return;
+
+  // Set the recorder's properties from form values
+  settingsRecorder.trimAudio = document.getElementById('trim-audio').checked;
+  settingsRecorder.trimThreshold = parseFloat(document.getElementById('trim-threshold').value);
+  settingsRecorder.trimAudioLeft = document.getElementById('trim-start').checked;
+  settingsRecorder.trimAudioRight = document.getElementById('trim-end').checked;
+
+  settingsRecorder.loopSync = document.getElementById('loop-sync').checked;
+  settingsRecorder.syncThreshold = parseFloat(document.getElementById('sync-threshold').value);
+  settingsRecorder.recordSyncStart = document.getElementById('record-sync-start').checked;
+  settingsRecorder.recordSyncEnd = document.getElementById('record-sync-end').checked;
+  settingsRecorder.playSyncStart = document.getElementById('play-sync-start').checked;
+
+  settingsRecorder.loopable = document.getElementById('loopable').checked;
+
+  // Get the selected radio button value
+  const pressOption = document.querySelector('input[name="press-option"]:checked')?.value;
+  if (pressOption) {
+    settingsRecorder.playingPressOption = pressOption;
+  }
+
+  // Close the modal
+  settingsModal.close();
+  settingsRecorder = null; // Clear reference
+
+   for (const recorder of recorders) {
+    recorder.showIcon();
+  }
+  
+
+  
+});
+
