@@ -312,6 +312,11 @@ class Recorder {
       this.silenceDuration = Math.abs(offset);
     }
 
+    if (this.recordSyncStart === false) {
+      this.silenceDuration = 0;
+      this.startTrim = 0;
+    }
+
     setTimeout(() => {
       this.mediaRecorder.start();
     }, startDelay * 1000);
@@ -327,6 +332,11 @@ class Recorder {
     }
     if (offset < 0) {
       this.endTrim = Math.abs(offset);
+    }
+
+    if (this.recordSyncEnd === false) {
+      this.endTrim = 0;
+      this.stopDelay = 0;
     }
 
     setTimeout(() => {
