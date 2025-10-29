@@ -1,32 +1,34 @@
-HOLD_TO_DELETE_TIME = 600;
-TRIM_THRESH = 0.05;
-SYNC_THRESH = 20000;
+import { saveAllRecorders, loadAllRecorders, clearAllSavedData } from './storage.js';
 
-const recordButton = '<div class="record"></div>';
-const recordingButton = '<div class="record pulsing"></div>';
-const playButton =
+const HOLD_TO_DELETE_TIME = 600;
+export const TRIM_THRESH = 0.05;
+export const SYNC_THRESH = 20000;
+
+export const recordButton = '<div class="record"></div>';
+export const recordingButton = '<div class="record pulsing"></div>';
+export const playButton =
   '<div class="triangle-border"><div class="triangle"></div></div>';
-const playingButton =
+export const playingButton =
   '<div class="triangle-border pulsing"><div class="triangle pulsing"></div></div>';
 const settingsButtons ='<div><img src="icons/settings.svg"></div>'
 
-settingsModal = document.getElementById("settings");
-settingsButton = document.getElementById("settings-icon");
+const settingsModal = document.getElementById("settings");
+const settingsButton = document.getElementById("settings-icon");
 
-settingsRecorder = null;
+let settingsRecorder = null;
 
-settingsClicked = false;
+let settingsClicked = false;
 
 
 
 function getTimeToStart(thresh) {
-  playingTracks = Recorder.instances.filter(
+  const playingTracks = Recorder.instances.filter(
     (r) => r.recordingState === "playing" && r.loop === true
   );
-  timeToStarts = [];
+  const timeToStarts = [];
   for (const recorder of playingTracks) {
-    timeToStart = recorder.trackLength - recorder.currentTime;
-    timeSinceStart = recorder.ctx.currentTime - recorder.startTime;
+    const timeToStart = recorder.trackLength - recorder.currentTime;
+    const timeSinceStart = recorder.ctx.currentTime - recorder.startTime;
     if (timeSinceStart <= timeToStart) {
       timeToStarts.push(0 - timeSinceStart);
     } else {
@@ -40,7 +42,7 @@ function getTimeToStart(thresh) {
   console.log(filtered, "FILTERED");
   if (filtered.length === 0) return null;
 
-  smallestAbs = filtered.reduce((a, b) => (Math.abs(a) < Math.abs(b) ? a : b));
+  const smallestAbs = filtered.reduce((a, b) => (Math.abs(a) < Math.abs(b) ? a : b));
   console.log(smallestAbs);
   return smallestAbs;
 }
@@ -491,6 +493,9 @@ const recorders = [
   recorder9,
 ];
 
+// Load saved recordings immediately after recorders are created
+loadAllRecorders(recorders);
+
 settingsButton.addEventListener("click", () => {
   settingsClicked = true;
   for (const recorder of recorders) {
@@ -534,6 +539,26 @@ settingsForm.addEventListener('submit', (e) => {
   }
   
 
-  
+
+});
+
+// Add event listeners for save/clear buttons once DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  const saveButton = document.getElementById('save-session');
+  const clearButton = document.getElementById('clear-session');
+
+  if (saveButton) {
+    saveButton.addEventListener('click', () => saveAllRecorders(recorders));
+  }
+
+  if (clearButton) {
+    clearButton.addEventListener('click', () => {
+      if (confirm('Are you sure you want to clear all saved data? This cannot be undone.')) {
+        clearAllSavedData();
+        // Optionally reload the page to reset everything
+        setTimeout(() => location.reload(), 500);
+      }
+    });
+  }
 });
 

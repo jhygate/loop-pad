@@ -1,4 +1,4 @@
-<script src="script.js" defer></script>
+<script type="module" src="script.js"></script>
 <script src="helpers.js" defer></script>
 
 
@@ -39,6 +39,11 @@
 
       <img src="icons/loop.svg">
 
+      <div style="position: fixed; bottom: 20px; right: 20px; display: flex; gap: 10px;">
+        <button id="save-session" style="padding: 10px 20px; cursor: pointer;">Save Session</button>
+        <button id="clear-session" style="padding: 10px 20px; cursor: pointer;">Clear Saved Data</button>
+      </div>
+
       <dialog id="settings">
         <h1>Settings</h1>
         <form id="settings-form">
@@ -64,8 +69,9 @@
       </dialog>
 
       <img src="icons/settings.svg" id="settings-icon"/>
+      <button id="save">Save</button>
 
-  </body>
+    </body>
 
 </html> 
 
