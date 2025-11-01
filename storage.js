@@ -1,5 +1,5 @@
 // IndexedDB Management for LoopPad
-import { playButton, TRIM_THRESH, SYNC_THRESH } from './script.js';
+import { PLAYBUTTON, TRIM_THRESH, SYNC_THRESH } from './constants.js';
 
 export const DB_NAME = 'LoopPadDB';
 export const DB_VERSION = 1;
@@ -173,7 +173,7 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
 
       // Set to recorded state (not playing, since we can't resume mid-playback)
       recorder.recordingState = 'recorded';
-      recorder.button.innerHTML = playButton;
+      recorder.button.innerHTML = PLAYBUTTON;
 
       console.log(`Recorder ${index} restored with audio, state set to recorded`);
     } else {
@@ -224,5 +224,129 @@ export async function clearAllSavedData() {
     alert('All saved data cleared!');
   } catch (err) {
     console.error('Error clearing data:', err);
+  }
+}
+
+// Export configuration to JSON file
+export async function exportConfigToFile(recorders) {
+  try {
+    const config = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      recorders: []
+    };
+
+    for (let i = 0; i < recorders.length; i++) {
+      const recorder = recorders[i];
+      const recorderData = {
+        index: i,
+        recordingState: recorder.recordingState,
+        loop: recorder.loop,
+        trimAudio: recorder.trimAudio,
+        trimThreshold: recorder.trimThreshold,
+        trimAudioLeft: recorder.trimAudioLeft,
+        trimAudioRight: recorder.trimAudioRight,
+        loopSync: recorder.loopSync,
+        syncThreshold: recorder.syncThreshold,
+        recordSyncStart: recorder.recordSyncStart,
+        recordSyncEnd: recorder.recordSyncEnd,
+        playSyncStart: recorder.playSyncStart,
+        loopable: recorder.loopable,
+        playingPressOption: recorder.playingPressOption,
+        audioBuffer: audioBufferToStorable(recorder.trimmedBuffer),
+        hasAudio: recorder.trimmedBuffer != null
+      };
+      config.recorders.push(recorderData);
+    }
+
+    const jsonString = JSON.stringify(config, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `looppad-config-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert('Configuration exported successfully!');
+  } catch (err) {
+    console.error('Error exporting config:', err);
+    alert('Error exporting configuration');
+  }
+}
+
+// Import configuration from JSON file
+export async function importConfigFromFile(recorders) {
+  try {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const config = JSON.parse(event.target.result);
+
+          if (!config.version || !config.recorders) {
+            alert('Invalid configuration file');
+            return;
+          }
+
+          for (const recorderData of config.recorders) {
+            const index = recorderData.index;
+            if (index >= 0 && index < recorders.length) {
+              const recorder = recorders[index];
+
+              // Restore settings
+              recorder.loop = recorderData.loop || false;
+              recorder.trimAudio = recorderData.trimAudio || false;
+              recorder.trimThreshold = recorderData.trimThreshold || TRIM_THRESH;
+              recorder.trimAudioLeft = recorderData.trimAudioLeft || false;
+              recorder.trimAudioRight = recorderData.trimAudioRight || false;
+              recorder.loopSync = recorderData.loopSync || false;
+              recorder.syncThreshold = recorderData.syncThreshold || SYNC_THRESH;
+              recorder.recordSyncStart = recorderData.recordSyncStart || false;
+              recorder.recordSyncEnd = recorderData.recordSyncEnd || false;
+              recorder.playSyncStart = recorderData.playSyncStart || false;
+              recorder.loopable = recorderData.loopable || false;
+              recorder.playingPressOption = recorderData.playingPressOption || "stop";
+
+              // Restore audio if it exists
+              if (recorderData.audioBuffer && recorderData.hasAudio) {
+                recorder.ctx = new AudioContext();
+                recorder.trimmedBuffer = storableToAudioBuffer(recorderData.audioBuffer, recorder.ctx);
+                recorder.recordingState = 'recorded';
+                recorder.button.innerHTML = PLAYBUTTON;
+              } else {
+                // Reset to not-recording state if no audio
+                recorder.recordingState = 'not-recording';
+                recorder.trimmedBuffer = null;
+                const RECORDBUTTON = '<div class="record"></div>';
+                recorder.button.innerHTML = RECORDBUTTON;
+              }
+            }
+          }
+
+          alert('Configuration loaded successfully!');
+        } catch (err) {
+          console.error('Error parsing config file:', err);
+          alert('Error loading configuration file');
+        }
+      };
+
+      reader.readAsText(file);
+    };
+
+    input.click();
+  } catch (err) {
+    console.error('Error importing config:', err);
+    alert('Error importing configuration');
   }
 }

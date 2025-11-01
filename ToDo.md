@@ -1,0 +1,3 @@
+- [ ] Refactor Recorder objects (pull into own file + clean)
+- [ ] Make a metronome instance
+- [ ] Chucking Icons on the page (e.g looping...)
