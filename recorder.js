@@ -1,5 +1,5 @@
 import { TRIM_THRESH, SYNC_THRESH, PLAYBUTTON, RECORDBUTTON, RECORDINGBUTTON, PLAYINGBUTTON, SETTINGSBUTTON, HOLD_TO_DELETE_TIME } from './constants.js'
-import { getTimeToStart } from "./helpers.js"
+import { getTimeToStart, trimBuffer } from "./helpers.js"
 import { saveRecorderToIndexedDB } from './storage.js'
 
 
