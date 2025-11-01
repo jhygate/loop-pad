@@ -350,3 +350,27 @@ export async function importConfigFromFile(recorders) {
     alert('Error importing configuration');
   }
 }
+
+// Add event listeners for save/clear buttons once DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  const saveButton = document.getElementById('save-session');
+  const clearButton = document.getElementById('clear-session');
+  const exportButton = document.getElementById('export-config');
+  const importButton = document.getElementById('import-config');
+
+  
+  saveButton.addEventListener('click', () => saveAllRecorders(recorders));
+   
+  clearButton.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear all saved data? This cannot be undone.')) {
+      clearAllSavedData();
+      // Optionally reload the page to reset everything
+      setTimeout(() => location.reload(), 500);
+    }
+  });
+ 
+  exportButton.addEventListener('click', () => exportConfigToFile(recorders));
+  importButton.addEventListener('click', () => importConfigFromFile(recorders));
+
+});
+

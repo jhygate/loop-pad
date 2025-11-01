@@ -3,10 +3,8 @@ import { getTimeToStart } from "./helpers.js"
 
 
 export class Recorder {
-  static instances = [];
 
-  constructor(buttonId, key, appState) {
-    Recorder.instances.push(this);
+  constructor(buttonId, key, appState) { 
 
     //Public
     this.recordingState = "not-recording";
@@ -222,8 +220,8 @@ export class Recorder {
         document.getElementById('press-option-restart').checked = true;
       }
 
-      settingsRecorder = this;  
-      settingsModal.showModal();
+      this.appState.settingsRecorder = this;  
+      this.appState.settingsModal.showModal();
       this.appState.settingsClicked = false;
       return;
     }
@@ -259,7 +257,7 @@ export class Recorder {
     this.recordingState = "recording";
     this.button.innerHTML = RECORDINGBUTTON;
 
-    const offset = getTimeToStart(this.syncThreshold, Recorder.instances);
+    const offset = getTimeToStart(this.syncThreshold, this.appState.recorders);
 
     let startDelay = 0;
     this.silenceDuration = 0;
@@ -282,7 +280,7 @@ export class Recorder {
   }
 
   _stopRecording() {
-    const offset = getTimeToStart(this.syncThreshold, Recorder.instances);
+    const offset = getTimeToStart(this.syncThreshold, this.appState.recorders);
 
     let stopDelay = 0;
     this.endTrim = 0;
@@ -306,7 +304,7 @@ export class Recorder {
   }
 
   _setupAudioPlay() {
-    let offset = getTimeToStart(this.syncThreshold, Recorder.instances);
+    let offset = getTimeToStart(this.syncThreshold, this.appState.recorders);
 
     // If sync is disabled or not in sync mode, play immediately
     if (!this.loopSync || !this.playSyncStart || offset == null) {

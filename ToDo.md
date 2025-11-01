@@ -1,3 +1,5 @@
-- [ ] Refactor Recorder objects (pull into own file + clean)
+- [x] Refactor Recorder objects (pull into own file)
+- [ ] Refactor Recorder (clean)
+- [ ] Objectise Settings functionality
 - [ ] Make a metronome instance
 - [ ] Chucking Icons on the page (e.g looping...)
