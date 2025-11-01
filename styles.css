@@ -118,3 +118,46 @@
   border-width: 12.5px 0 12.5px 25px;
   border-color: transparent transparent transparent #00c853; /* your green color */
 }
+
+.control-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.control-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-icon {
+  cursor: pointer;
+}
+
+.btn {
+  padding: 10px 20px;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.btn-secondary {
+  background-color: #2196F3;
+  color: white;
+}
+
+.btn-default {
+  background-color: #f0f0f0;
+  color: #333;
+}

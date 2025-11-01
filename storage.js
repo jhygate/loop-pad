@@ -86,12 +86,6 @@ export async function saveRecorderToIndexedDB(recorder, index) {
       hasAudio: hasAudio
     };
 
-    console.log(`Saving recorder ${index}:`, {
-      recordingState: data.recordingState,
-      hasAudio: data.hasAudio,
-      loop: data.loop
-    });
-
     const request = store.put(data);
     await new Promise((resolve, reject) => {
       request.onsuccess = () => resolve();
@@ -106,9 +100,6 @@ export async function saveRecorderToIndexedDB(recorder, index) {
 // Save all recorders
 export async function saveAllRecorders(recorders) {
   try {
-    console.log('recorders array:', recorders);
-    console.log('recorders.length:', recorders?.length);
-
     if (!recorders || recorders.length === 0) {
       console.error('Recorders array is not available!');
       alert('Error: Recorders not initialized');
@@ -116,12 +107,8 @@ export async function saveAllRecorders(recorders) {
     }
 
     for (let i = 0; i < recorders.length; i++) {
-      console.log(`Recorder ${i}:`, recorders[i]);
-      console.log(`Recorder ${i} recordingState:`, recorders[i]?.recordingState);
-      console.log(`Recorder ${i} trimmedBuffer:`, recorders[i]?.trimmedBuffer);
       await saveRecorderToIndexedDB(recorders[i], i);
     }
-    console.log('All recorders saved!');
     alert('Session saved successfully!');
   } catch (err) {
     console.error('Error saving all recorders:', err);
@@ -144,13 +131,6 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
 
     if (!data) return false;
 
-    console.log(`Loading recorder ${index}:`, data);
-    console.log(`Loading recorder ${index}:`, {
-      recordingState: data.recordingState,
-      hasAudio: data.hasAudio,
-      loop: data.loop
-    });
-
     // Restore settings
     recorder.loop = data.loop || false;
     recorder.trimAudio = data.trimAudio || false;
@@ -165,19 +145,12 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
     recorder.loopable = data.loopable || false;
     recorder.playingPressOption = data.playingPressOption || "stop";
 
-    // Restore audio if it exists (regardless of state - could be playing, recorded, etc.)
+    // Restore audio if it exists
     if (data.audioBuffer && data.hasAudio) {
-      console.log(`Restoring audio for recorder ${index}`);
       recorder.ctx = new AudioContext();
       recorder.trimmedBuffer = storableToAudioBuffer(data.audioBuffer, recorder.ctx);
-
-      // Set to recorded state (not playing, since we can't resume mid-playback)
       recorder.recordingState = 'recorded';
       recorder.button.innerHTML = PLAYBUTTON;
-
-      console.log(`Recorder ${index} restored with audio, state set to recorded`);
-    } else {
-      console.log(`No audio to restore for recorder ${index}`);
     }
 
     return true;
@@ -190,18 +163,9 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
 // Load all recorders
 export async function loadAllRecorders(recorders) {
   try {
-    console.log('loadAllRecorders called, recorders:', recorders);
-    let loadedCount = 0;
     for (let i = 0; i < recorders.length; i++) {
-      console.log(`About to load recorder ${i}, current state:`, recorders[i].recordingState);
-      const loaded = await loadRecorderFromIndexedDB(recorders[i], i);
-      console.log(`After loading recorder ${i}, new state:`, recorders[i].recordingState);
-      if (loaded) loadedCount++;
+      await loadRecorderFromIndexedDB(recorders[i], i);
     }
-    if (loadedCount > 0) {
-      console.log(`Loaded ${loadedCount} recorders from storage`);
-    }
-    console.log('Final recorders state:', recorders);
   } catch (err) {
     console.error('Error loading all recorders:', err);
   }
@@ -220,7 +184,6 @@ export async function clearAllSavedData() {
       request.onerror = () => reject(request.error);
     });
 
-    console.log('All saved data cleared!');
     alert('All saved data cleared!');
   } catch (err) {
     console.error('Error clearing data:', err);
@@ -328,9 +291,13 @@ export async function importConfigFromFile(recorders) {
                 // Reset to not-recording state if no audio
                 recorder.recordingState = 'not-recording';
                 recorder.trimmedBuffer = null;
+                recorder.ctx = null;
                 const RECORDBUTTON = '<div class="record"></div>';
                 recorder.button.innerHTML = RECORDBUTTON;
               }
+
+              // Save each imported recorder to IndexedDB
+              await saveRecorderToIndexedDB(recorder, index);
             }
           }
 
@@ -351,16 +318,17 @@ export async function importConfigFromFile(recorders) {
   }
 }
 
-// Add event listeners for save/clear buttons once DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  const saveButton = document.getElementById('save-session');
+// Setup button event listeners - called from script.js after recorders are initialized
+export function setupButtonListeners(recorders) {
   const clearButton = document.getElementById('clear-session');
   const exportButton = document.getElementById('export-config');
   const importButton = document.getElementById('import-config');
 
-  
-  saveButton.addEventListener('click', () => saveAllRecorders(recorders));
-   
+  if (!clearButton || !exportButton || !importButton) {
+    console.error('Buttons not found in DOM!');
+    return;
+  }
+
   clearButton.addEventListener('click', () => {
     if (confirm('Are you sure you want to clear all saved data? This cannot be undone.')) {
       clearAllSavedData();
@@ -368,9 +336,8 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => location.reload(), 500);
     }
   });
- 
+
   exportButton.addEventListener('click', () => exportConfigToFile(recorders));
   importButton.addEventListener('click', () => importConfigFromFile(recorders));
-
-});
+}
 

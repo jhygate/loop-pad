@@ -1,10 +1,11 @@
 import { TRIM_THRESH, SYNC_THRESH, PLAYBUTTON, RECORDBUTTON, RECORDINGBUTTON, PLAYINGBUTTON, SETTINGSBUTTON, HOLD_TO_DELETE_TIME } from './constants.js'
 import { getTimeToStart } from "./helpers.js"
+import { saveRecorderToIndexedDB } from './storage.js'
 
 
 export class Recorder {
 
-  constructor(buttonId, key, appState) { 
+  constructor(buttonId, key, appState) {
 
     //Public
     this.recordingState = "not-recording";
@@ -15,6 +16,7 @@ export class Recorder {
     this.button = document.getElementById(buttonId);
     this.key = key;
     this.appState = appState;
+    this.index = null; // Will be set after construction
     this.clickCount = 0;
     this.resetting = false;
 
@@ -171,6 +173,11 @@ export class Recorder {
     this.chunks = [];
     this.silenceDuration = 0;
     this.endTrim = 0;
+
+    // Auto-save after recording completes
+    if (this.index !== null) {
+      saveRecorderToIndexedDB(this, this.index);
+    }
   }
 
   _onPointerDown() {
@@ -250,6 +257,15 @@ export class Recorder {
     this.resetting = true;
 
     this._stopAudio();
+
+    // Clear the audio buffer so it's not saved
+    this.trimmedBuffer = null;
+    this.ctx = null;
+
+    // Auto-save after deleting
+    if (this.index !== null) {
+      saveRecorderToIndexedDB(this, this.index);
+    }
   }
 
   _startRecording() {

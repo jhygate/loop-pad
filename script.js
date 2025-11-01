@@ -1,4 +1,4 @@
-import { loadAllRecorders } from './storage.js';
+import { loadAllRecorders, setupButtonListeners } from './storage.js';
 import { Recorder } from './recorder.js'
 import { Settings } from './settings.js';
 
@@ -6,7 +6,7 @@ import { Settings } from './settings.js';
 const appState = {
   settingClicked: false,
   settingsRecorder: null,
-  settingsModal: document.getElementById("settings"),
+  settingsModal: null, // Will be set by Settings class
   recorders: [],
 };
 
@@ -33,10 +33,29 @@ appState.recorders = [
   recorder9,
 ];
 
+// Set index for each recorder for auto-save functionality
+appState.recorders.forEach((recorder, index) => {
+  recorder.index = index;
+});
+
 // Load saved recordings immediately after recorders are created
 loadAllRecorders(appState.recorders);
 
 const settings = new Settings(appState);
+
+// Expose appState globally (for debugging)
+window.appState = appState;
+
+// Setup storage button event listeners after DOM is ready
+if (document.readyState === 'loading') {
+  // DOM is still loading, wait for DOMContentLoaded
+  document.addEventListener('DOMContentLoaded', () => {
+    setupButtonListeners(appState.recorders);
+  });
+} else {
+  // DOM already loaded (module scripts are deferred), call immediately
+  setupButtonListeners(appState.recorders);
+}
 
 
 
