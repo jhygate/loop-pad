@@ -86,8 +86,25 @@ export class Recorder {
     this.button.innerHTML = RECORDBUTTON;
     // Note: pad number will be set after index is assigned in script.js
 
-    this.button.addEventListener("pointerdown", () => this._onPointerDown());
-    this.button.addEventListener("pointerup", () => this._onPointerUp());
+    this.button.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); // Prevent default touch behavior
+      this._onPointerDown();
+    });
+
+    this.button.addEventListener("pointerup", (e) => {
+      e.preventDefault();
+      this._onPointerUp();
+    });
+
+    this.button.addEventListener("pointercancel", () => this._onPointerUp());
+
+    // Also listen on document for pointerup in case it happens outside button
+    document.addEventListener("pointerup", (e) => {
+      if (this._isPressed) {
+        this._onPointerUp();
+      }
+    });
+
     this.button.style.setProperty("--delete-time", `${HOLD_TO_DELETE_TIME}ms`);
 
     document.addEventListener("keydown", (e) => this._onKeyDown(e));
@@ -194,6 +211,7 @@ export class Recorder {
     if (this.appState.settingsClicked) {
       return;
     }
+    this._isPressed = true;
     this.resetting = false;
     this.clickCount += 1;
     console.log(this.clickCount);
@@ -214,22 +232,24 @@ export class Recorder {
   }
 
   _onPointerUp(){
-    
+    if (!this._isPressed) return;
+    this._isPressed = false;
+
     if (this.appState.settingsClicked) {
 
       document.getElementById('trim-audio').checked = this.trimAudio;
       document.getElementById('trim-threshold').value = this.trimThreshold;
       document.getElementById('trim-start').checked = this.trimAudioLeft;
       document.getElementById('trim-end').checked = this.trimAudioRight;
-      
+
       document.getElementById('loop-sync').checked = this.loopSync;
       document.getElementById('sync-threshold').value = this.syncThreshold;
       document.getElementById('record-sync-start').checked = this.recordSyncStart;
       document.getElementById('record-sync-end').checked = this.recordSyncEnd;
       document.getElementById('play-sync-start').checked = this.playSyncStart;
-      
+
       document.getElementById('loopable').checked = this.loopable;
-      
+
       // Set radio button for playingPressOption
       if (this.playingPressOption === "stop") {
         document.getElementById('press-option-stop').checked = true;
@@ -237,7 +257,7 @@ export class Recorder {
         document.getElementById('press-option-restart').checked = true;
       }
 
-      this.appState.settingsRecorder = this;  
+      this.appState.settingsRecorder = this;
       this.appState.settingsModal.showModal();
       this.appState.settingsClicked = false;
       return;

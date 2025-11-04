@@ -22,6 +22,36 @@ body {
   width: 100%;
 }
 
+/* App Header */
+.app-header {
+  text-align: center;
+  margin-bottom: 40px;
+  background: #0a0a0a;
+  padding: 30px 40px;
+  border: 4px solid #0a0a0a;
+  box-shadow: 8px 8px 0 #ff3366;
+}
+
+.app-title {
+  font-family: "Inter", sans-serif;
+  font-size: 72px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -2px;
+  text-transform: uppercase;
+}
+
+.app-subtitle {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ff3366;
+  margin: 10px 0 0 0;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
 /* Main Content */
 .main-content {
   display: flex;
@@ -46,6 +76,10 @@ body {
   position: relative;
   transition: all 0.15s ease;
   box-shadow: 6px 6px 0 #0a0a0a;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .pad:hover {
@@ -602,15 +636,58 @@ dialog#settings::backdrop {
 
 @media (max-width: 768px) {
   body {
-    padding: 20px 15px;
+    padding: 15px 10px;
   }
-  .grid {
-    gap: 15px;
-  }
-}
 
-@media (max-width: 600px) {
+  .app-header {
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .app-title {
+    font-size: 36px;
+  }
+
+  .app-subtitle {
+    font-size: 14px;
+    letter-spacing: 2px;
+  }
+
+  .main-content {
+    gap: 20px;
+  }
+
   .grid {
-    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .pad-number {
+    font-size: 16px;
+    top: 8px;
+    left: 10px;
+  }
+
+  .record-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .play-icon {
+    border-left: 36px solid #0a0a0a;
+    border-top: 21px solid transparent;
+    border-bottom: 21px solid transparent;
+  }
+
+  .pad-status {
+    font-size: 9px;
+    padding: 8px 0;
+  }
+
+  .waveform {
+    bottom: 38px;
+    left: 10px;
+    right: 10px;
+    height: 25px;
+    gap: 2px;
   }
 }

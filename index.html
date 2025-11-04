@@ -10,6 +10,11 @@
 
   <body>
     <div class="container">
+      <header class="app-header">
+        <h1 class="app-title">LoopPad</h1>
+        <p class="app-subtitle">Loopy Sampler</p>
+      </header>
+
       <div class="main-content">
         <div class="grid-section">
           <div class="grid">
@@ -107,6 +112,16 @@
 
         <div class="side-panel">
           <div class="panel-card">
+            <h3>Settings</h3>
+            <div class="control-group">
+              <button class="control-btn" id="settings-icon">
+                <span>⚙️</span>
+                Pad Settings
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-card">
             <h3>Actions</h3>
             <div class="control-group">
               <button class="control-btn primary" id="export-config">
@@ -116,16 +131,6 @@
               <button class="control-btn" id="import-config">
                 <span>📁</span>
                 Load Project
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3>Settings</h3>
-            <div class="control-group">
-              <button class="control-btn" id="settings-icon">
-                <span>⚙️</span>
-                Pad Settings
               </button>
             </div>
           </div>
@@ -143,5 +148,4 @@
       </div>
     </div>
   </body>
-</html> 
-
+</html>
