@@ -36,6 +36,7 @@ appState.recorders = [
 // Set index for each recorder for auto-save functionality
 appState.recorders.forEach((recorder, index) => {
   recorder.index = index;
+  recorder._updatePadNumber();
 });
 
 // Load saved recordings immediately after recorders are created

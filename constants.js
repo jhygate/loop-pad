@@ -4,10 +4,72 @@ export const SYNC_THRESH = 20000;
 
 
 
-export const RECORDBUTTON = '<div class="record"></div>';
-export const RECORDINGBUTTON = '<div class="record pulsing"></div>';
-export const PLAYBUTTON =
-  '<div class="triangle-border"><div class="triangle"></div></div>';
-export const PLAYINGBUTTON =
-  '<div class="triangle-border pulsing"><div class="triangle pulsing"></div></div>';
-export const SETTINGSBUTTON ='<div><img src="icons/settings.svg"></div>'
+export const RECORDBUTTON = `
+  <div class="pad-inner">
+    <div class="pad-number"></div>
+    <div class="icon-wrapper">
+      <div class="record-icon"></div>
+    </div>
+    <div class="pad-status">Empty</div>
+  </div>
+`;
+
+export const RECORDINGBUTTON = `
+  <div class="pad-inner">
+    <div class="pad-number"></div>
+    <div class="icon-wrapper">
+      <div class="record-icon"></div>
+    </div>
+    <div class="pad-status">Recording</div>
+  </div>
+`;
+
+export const PLAYBUTTON = `
+  <div class="pad-inner">
+    <div class="pad-number"></div>
+    <div class="icon-wrapper">
+      <div class="play-icon"></div>
+    </div>
+    <div class="waveform">
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+    </div>
+    <div class="pad-status">Ready</div>
+  </div>
+`;
+
+export const PLAYINGBUTTON = `
+  <div class="pad-inner">
+    <div class="pad-number"></div>
+    <div class="icon-wrapper">
+      <div class="play-icon"></div>
+    </div>
+    <div class="waveform">
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+      <div class="waveform-bar"></div>
+    </div>
+    <div class="pad-status">Playing</div>
+  </div>
+`;
+
+export const SETTINGSBUTTON = `
+  <div class="pad-inner">
+    <div class="pad-number"></div>
+    <div class="icon-wrapper">
+      <img src="icons/settings.svg" style="width: 55px; height: 55px;">
+    </div>
+    <div class="pad-status">Settings</div>
+  </div>
+`;

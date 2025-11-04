@@ -151,6 +151,8 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
       recorder.trimmedBuffer = storableToAudioBuffer(data.audioBuffer, recorder.ctx);
       recorder.recordingState = 'recorded';
       recorder.button.innerHTML = PLAYBUTTON;
+      recorder._updatePadNumber();
+      recorder.button.classList.add("has-audio");
     }
 
     return true;
@@ -287,13 +289,14 @@ export async function importConfigFromFile(recorders) {
                 recorder.trimmedBuffer = storableToAudioBuffer(recorderData.audioBuffer, recorder.ctx);
                 recorder.recordingState = 'recorded';
                 recorder.button.innerHTML = PLAYBUTTON;
+                recorder._updatePadNumber();
+                recorder.button.classList.add("has-audio");
               } else {
                 // Reset to not-recording state if no audio
                 recorder.recordingState = 'not-recording';
                 recorder.trimmedBuffer = null;
                 recorder.ctx = null;
-                const RECORDBUTTON = '<div class="record"></div>';
-                recorder.button.innerHTML = RECORDBUTTON;
+                recorder.showIcon();
               }
 
               // Save each imported recorder to IndexedDB
