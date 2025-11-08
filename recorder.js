@@ -208,10 +208,11 @@ export class Recorder {
   }
 
   _onPointerDown() {
+    this._isPressed = true;
     if (this.appState.settingsClicked) {
       return;
     }
-    this._isPressed = true;
+    
     this.resetting = false;
     this.clickCount += 1;
     console.log(this.clickCount);
@@ -232,7 +233,7 @@ export class Recorder {
   }
 
   _onPointerUp(){
-    if (!this._isPressed) return;
+    if (!this._isPressed && !this.appState.settingsClicked) return;
     this._isPressed = false;
 
     if (this.appState.settingsClicked) {
