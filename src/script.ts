@@ -1,15 +1,20 @@
-import { loadAllRecorders, setupButtonListeners } from './storage.js';
-import { Recorder } from './recorder.js'
-import { Settings } from './settings.js';
+import { loadAllRecorders, setupButtonListeners } from "./storage";
+import { Recorder } from "./recorder";
+import { Settings } from "./settings";
 
+export type AppState = {
+  settingsClicked: boolean;
+  settingsRecorder: Recorder | null;
+  settingsModal: HTMLDialogElement | null;
+  recorders: Recorder[];
+};
 
-const appState = {
-  settingClicked: false,
+const appState: AppState = {
+  settingsClicked: false,
   settingsRecorder: null,
   settingsModal: null, // Will be set by Settings class
   recorders: [],
 };
-
 
 const recorder1 = new Recorder("btn1", "q", appState);
 const recorder2 = new Recorder("btn2", "w", appState);
@@ -44,22 +49,13 @@ loadAllRecorders(appState.recorders);
 
 const settings = new Settings(appState);
 
-// Expose appState globally (for debugging)
-window.appState = appState;
-
 // Setup storage button event listeners after DOM is ready
-if (document.readyState === 'loading') {
+if (document.readyState === "loading") {
   // DOM is still loading, wait for DOMContentLoaded
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener("DOMContentLoaded", () => {
     setupButtonListeners(appState.recorders);
   });
 } else {
   // DOM already loaded (module scripts are deferred), call immediately
   setupButtonListeners(appState.recorders);
 }
-
-
-
-
-
-

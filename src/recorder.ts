@@ -1,12 +1,62 @@
-import { TRIM_THRESH, SYNC_THRESH, PLAYBUTTON, RECORDBUTTON, RECORDINGBUTTON, PLAYINGBUTTON, SETTINGSBUTTON, HOLD_TO_DELETE_TIME } from './constants.js'
-import { getTimeToStart, trimBuffer } from "./helpers.js"
-import { saveRecorderToIndexedDB } from './storage.js'
+import {
+  TRIM_THRESH,
+  SYNC_THRESH,
+  PLAYBUTTON,
+  RECORDBUTTON,
+  RECORDINGBUTTON,
+  PLAYINGBUTTON,
+  SETTINGSBUTTON,
+  HOLD_TO_DELETE_TIME,
+} from "./constants.js";
+import { getTimeToStart, trimBuffer } from "./helpers";
+import { saveRecorderToIndexedDB } from "./storage";
 
+type RecordingState = "not-recording" | "recording" | "recorded" | "playing";
 
 export class Recorder {
+  recordingState: RecordingState;
+  startTime: number | undefined;
+  loop: boolean;
 
-  constructor(buttonId, key, appState) {
+  //Private properties
+  private button: HTMLElement;
+  private key: string;
+  private appState: any;
+  index: number | null;
+  private clickCount: number;
+  private resetting: boolean;
 
+  private mediaRecorder: MediaRecorder | null;
+  private chunks: BlobPart[];
+  private silenceDuration: number;
+  private endTrim: number;
+
+  trimmedBuffer: AudioBuffer | null;
+  ctx: AudioContext | null;
+  src: AudioBufferSourceNode | null;
+
+  trimAudio: boolean;
+  trimThreshold: number;
+  trimAudioLeft: boolean;
+  trimAudioRight: boolean;
+
+  loopSync: boolean;
+  syncThreshold: number;
+  recordSyncStart: boolean;
+  recordSyncEnd: boolean;
+  playSyncStart: boolean;
+
+  loopable: boolean;
+
+  playingPressOption: "stop" | "restart";
+
+  _isPressed: boolean;
+  _holdTimer: any;
+  _clickResetTimer: any;
+  stopDelay: number;
+  startTrim: number;
+
+  constructor(buttonId: string, key: string, appState: any) {
     //Public
     this.recordingState = "not-recording";
     this.startTime = undefined;
@@ -42,7 +92,8 @@ export class Recorder {
 
     this.loopable = false;
 
-    this.playingPressOption = "stop" //Options "stop" "restart"
+    this.playingPressOption = "stop"; //Options "stop" "restart"
+    this._isPressed = false;
 
     this._bindUI();
     this._initMedia();
@@ -75,16 +126,14 @@ export class Recorder {
   }
 
   _updatePadNumber() {
-    const padNumber = this.button.querySelector('.pad-number');
+    const padNumber = this.button.querySelector(".pad-number");
     if (padNumber && this.index !== null) {
-      padNumber.textContent = this.index + 1;
+      padNumber.textContent = (this.index + 1).toString();
     }
   }
 
-
   _bindUI() {
     this.button.innerHTML = RECORDBUTTON;
-    // Note: pad number will be set after index is assigned in script.js
 
     this.button.addEventListener("pointerdown", (e) => {
       e.preventDefault(); // Prevent default touch behavior
@@ -212,7 +261,7 @@ export class Recorder {
     if (this.appState.settingsClicked) {
       return;
     }
-    
+
     this.resetting = false;
     this.clickCount += 1;
     console.log(this.clickCount);
@@ -232,30 +281,43 @@ export class Recorder {
     }
   }
 
-  _onPointerUp(){
+  _onPointerUp() {
     if (!this._isPressed && !this.appState.settingsClicked) return;
     this._isPressed = false;
 
     if (this.appState.settingsClicked) {
+      (document.getElementById("trim-audio") as HTMLInputElement).checked =
+        this.trimAudio;
+      (document.getElementById("trim-threshold") as HTMLInputElement).value =
+        this.trimThreshold.toString();
+      (document.getElementById("trim-start") as HTMLInputElement).checked =
+        this.trimAudioLeft;
+      (document.getElementById("trim-end") as HTMLInputElement).checked =
+        this.trimAudioRight;
 
-      document.getElementById('trim-audio').checked = this.trimAudio;
-      document.getElementById('trim-threshold').value = this.trimThreshold;
-      document.getElementById('trim-start').checked = this.trimAudioLeft;
-      document.getElementById('trim-end').checked = this.trimAudioRight;
-
-      document.getElementById('loop-sync').checked = this.loopSync;
-      document.getElementById('sync-threshold').value = this.syncThreshold;
-      document.getElementById('record-sync-start').checked = this.recordSyncStart;
-      document.getElementById('record-sync-end').checked = this.recordSyncEnd;
-      document.getElementById('play-sync-start').checked = this.playSyncStart;
-
-      document.getElementById('loopable').checked = this.loopable;
+      (document.getElementById("loop-sync") as HTMLInputElement).checked =
+        this.loopSync;
+      (document.getElementById("sync-threshold") as HTMLInputElement).value =
+        this.syncThreshold.toString();
+      (
+        document.getElementById("record-sync-start") as HTMLInputElement
+      ).checked = this.recordSyncStart;
+      (document.getElementById("record-sync-end") as HTMLInputElement).checked =
+        this.recordSyncEnd;
+      (document.getElementById("play-sync-start") as HTMLInputElement).checked =
+        this.playSyncStart;
+      (document.getElementById("loopable") as HTMLInputElement).checked =
+        this.loopable;
 
       // Set radio button for playingPressOption
       if (this.playingPressOption === "stop") {
-        document.getElementById('press-option-stop').checked = true;
+        (
+          document.getElementById("press-option-stop") as HTMLInputElement
+        ).checked = true;
       } else if (this.playingPressOption === "restart") {
-        document.getElementById('press-option-restart').checked = true;
+        (
+          document.getElementById("press-option-restart") as HTMLInputElement
+        ).checked = true;
       }
 
       this.appState.settingsRecorder = this;

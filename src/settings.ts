@@ -1,5 +1,10 @@
+import { AppState } from "./script";
+
 export class Settings {
-  constructor(appState) {
+  appState: AppState;
+  settingsUIButton: HTMLElement;
+
+  constructor(appState: AppState) {
     this.appState = appState;
 
     this.createSettingsDialog();
@@ -96,7 +101,7 @@ export class Settings {
     document.body.appendChild(dialog);
 
     // Add close button listener
-    dialog.querySelector('#settings-close').addEventListener('click', () => {
+    dialog.querySelector("#settings-close").addEventListener("click", () => {
       dialog.close();
     });
 
@@ -129,68 +134,68 @@ export class Settings {
   }
 
   setFormEventListeners() {
-    document.getElementById("trim-audio").addEventListener("change", (e) => {
+    document.getElementById("trim-audio")?.addEventListener("change", (e) => {
       if (this.appState.settingsRecorder)
-        this.appState.settingsRecorder.trimAudio = e.target.checked;
+        this.appState.settingsRecorder.trimAudio = (e.target as HTMLInputElement).checked;
     });
 
-    document.getElementById("trim-start").addEventListener("change", (e) => {
+    document.getElementById("trim-start")?.addEventListener("change", (e) => {
       if (this.appState.settingsRecorder)
-        this.appState.settingsRecorder.trimAudioLeft = e.target.checked;
+        this.appState.settingsRecorder.trimAudioLeft = (e.target as HTMLInputElement).checked;
     });
 
-    document.getElementById("trim-end").addEventListener("change", (e) => {
+    document.getElementById("trim-end")?.addEventListener("change", (e) => {
       if (this.appState.settingsRecorder)
-        this.appState.settingsRecorder.trimAudioRight = e.target.checked;
+        this.appState.settingsRecorder.trimAudioRight = (e.target as HTMLInputElement).checked;
     });
 
-    document.getElementById("loop-sync").addEventListener("change", (e) => {
+    document.getElementById("loop-sync")?.addEventListener("change", (e) => {
       if (this.appState.settingsRecorder)
-        this.appState.settingsRecorder.loopSync = e.target.checked;
+        this.appState.settingsRecorder.loopSync = (e.target as HTMLInputElement).checked;
     });
 
     document
       .getElementById("record-sync-start")
-      .addEventListener("change", (e) => {
+      ?.addEventListener("change", (e) => {
         if (this.appState.settingsRecorder)
-          this.appState.settingsRecorder.recordSyncStart = e.target.checked;
+          this.appState.settingsRecorder.recordSyncStart = (e.target as HTMLInputElement).checked;
       });
 
     document
       .getElementById("record-sync-end")
-      .addEventListener("change", (e) => {
+      ?.addEventListener("change", (e) => {
         if (this.appState.settingsRecorder)
-          this.appState.settingsRecorder.recordSyncEnd = e.target.checked;
+          this.appState.settingsRecorder.recordSyncEnd = (e.target as HTMLInputElement).checked;
       });
 
     document
       .getElementById("play-sync-start")
-      .addEventListener("change", (e) => {
+      ?.addEventListener("change", (e) => {
         if (this.appState.settingsRecorder)
-          this.appState.settingsRecorder.playSyncStart = e.target.checked;
+          this.appState.settingsRecorder.playSyncStart = (e.target as HTMLInputElement).checked;
       });
 
-    document.getElementById("loopable").addEventListener("change", (e) => {
+    document.getElementById("loopable")?.addEventListener("change", (e) => {
       if (this.appState.settingsRecorder)
-        this.appState.settingsRecorder.loopable = e.target.checked;
+        this.appState.settingsRecorder.loopable = (e.target as HTMLInputElement).checked;
     });
 
-    document.getElementById("trim-threshold").addEventListener("input", (e) => {
+    document.getElementById("trim-threshold")?.addEventListener("input", (e) => {
       if (this.appState.settingsRecorder)
         this.appState.settingsRecorder.trimThreshold =
-          parseFloat(e.target.value) || 0;
+          parseFloat((e.target as HTMLInputElement).value) || 0;
     });
 
-    document.getElementById("sync-threshold").addEventListener("input", (e) => {
+    document.getElementById("sync-threshold")?.addEventListener("input", (e) => {
       if (this.appState.settingsRecorder)
         this.appState.settingsRecorder.syncThreshold =
-          parseFloat(e.target.value) || 0;
+          parseFloat((e.target as HTMLInputElement).value) || 0;
     });
 
     document.querySelectorAll('input[name="press-option"]').forEach((el) => {
       el.addEventListener("change", (e) => {
-        if (this.appState.settingsRecorder && e.target.checked)
-          this.appState.settingsRecorder.playingPressOption = e.target.value;
+        if (this.appState.settingsRecorder && (e.target as HTMLInputElement).checked)
+          this.appState.settingsRecorder.playingPressOption = (e.target as HTMLInputElement).value as "stop" | "restart";
       });
     });
   }

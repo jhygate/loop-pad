@@ -1,12 +1,21 @@
 // IndexedDB Management for LoopPad
-import { PLAYBUTTON, TRIM_THRESH, SYNC_THRESH } from './constants.js';
+import { PLAYBUTTON, TRIM_THRESH, SYNC_THRESH } from "./constants.js";
 
-export const DB_NAME = 'LoopPadDB';
+export const DB_NAME = "LoopPadDB";
 export const DB_VERSION = 1;
-export const STORE_NAME = 'recorders';
+export const STORE_NAME = "recorders";
+
+// Type for storable audio buffer
+export interface StorableAudioBuffer {
+  sampleRate: number;
+  length: number;
+  duration: number;
+  numberOfChannels: number;
+  channels: number[][];
+}
 
 // Initialize IndexedDB
-export function openDB() {
+export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -14,16 +23,16 @@ export function openDB() {
     request.onsuccess = () => resolve(request.result);
 
     request.onupgradeneeded = (event) => {
-      const db = event.target.result;
+      const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
     };
   });
 }
 
 // Convert AudioBuffer to storable format
-export function audioBufferToStorable(audioBuffer) {
+export function audioBufferToStorable(audioBuffer: AudioBuffer | null): StorableAudioBuffer | null {
   if (!audioBuffer) return null;
 
   const channels = [];
@@ -36,12 +45,12 @@ export function audioBufferToStorable(audioBuffer) {
     length: audioBuffer.length,
     duration: audioBuffer.duration,
     numberOfChannels: audioBuffer.numberOfChannels,
-    channels: channels
+    channels: channels,
   };
 }
 
 // Convert stored format back to AudioBuffer
-export function storableToAudioBuffer(storable, audioContext) {
+export function storableToAudioBuffer(storable: StorableAudioBuffer | null, audioContext: AudioContext): AudioBuffer | null {
   if (!storable) return null;
 
   const audioBuffer = audioContext.createBuffer(
@@ -58,10 +67,10 @@ export function storableToAudioBuffer(storable, audioContext) {
 }
 
 // Save single recorder to IndexedDB
-export async function saveRecorderToIndexedDB(recorder, index) {
+export async function saveRecorderToIndexedDB(recorder: any, index: number): Promise<void> {
   try {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
 
     // Only save if there's actual audio recorded
@@ -83,48 +92,47 @@ export async function saveRecorderToIndexedDB(recorder, index) {
       loopable: recorder.loopable,
       playingPressOption: recorder.playingPressOption,
       audioBuffer: audioBufferToStorable(recorder.trimmedBuffer),
-      hasAudio: hasAudio
+      hasAudio: hasAudio,
     };
 
     const request = store.put(data);
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
-
   } catch (err) {
-    console.error('Error saving recorder:', err);
+    console.error("Error saving recorder:", err);
   }
 }
 
 // Save all recorders
-export async function saveAllRecorders(recorders) {
+export async function saveAllRecorders(recorders: any[]): Promise<void> {
   try {
     if (!recorders || recorders.length === 0) {
-      console.error('Recorders array is not available!');
-      alert('Error: Recorders not initialized');
+      console.error("Recorders array is not available!");
+      alert("Error: Recorders not initialized");
       return;
     }
 
     for (let i = 0; i < recorders.length; i++) {
       await saveRecorderToIndexedDB(recorders[i], i);
     }
-    alert('Session saved successfully!');
+    alert("Session saved successfully!");
   } catch (err) {
-    console.error('Error saving all recorders:', err);
-    alert('Error saving session');
+    console.error("Error saving all recorders:", err);
+    alert("Error saving session");
   }
 }
 
 // Load single recorder from IndexedDB
-export async function loadRecorderFromIndexedDB(recorder, index) {
+export async function loadRecorderFromIndexedDB(recorder: any, index: number): Promise<boolean> {
   try {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
 
     const request = store.get(index);
-    const data = await new Promise((resolve, reject) => {
+    const data = await new Promise<any>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -148,8 +156,11 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
     // Restore audio if it exists
     if (data.audioBuffer && data.hasAudio) {
       recorder.ctx = new AudioContext();
-      recorder.trimmedBuffer = storableToAudioBuffer(data.audioBuffer, recorder.ctx);
-      recorder.recordingState = 'recorded';
+      recorder.trimmedBuffer = storableToAudioBuffer(
+        data.audioBuffer,
+        recorder.ctx
+      );
+      recorder.recordingState = "recorded";
       recorder.button.innerHTML = PLAYBUTTON;
       recorder._updatePadNumber();
       recorder.button.classList.add("has-audio");
@@ -157,48 +168,48 @@ export async function loadRecorderFromIndexedDB(recorder, index) {
 
     return true;
   } catch (err) {
-    console.error('Error loading recorder:', err);
+    console.error("Error loading recorder:", err);
     return false;
   }
 }
 
 // Load all recorders
-export async function loadAllRecorders(recorders) {
+export async function loadAllRecorders(recorders: any[]): Promise<void> {
   try {
     for (let i = 0; i < recorders.length; i++) {
       await loadRecorderFromIndexedDB(recorders[i], i);
     }
   } catch (err) {
-    console.error('Error loading all recorders:', err);
+    console.error("Error loading all recorders:", err);
   }
 }
 
 // Clear all saved data
-export async function clearAllSavedData() {
+export async function clearAllSavedData(): Promise<void> {
   try {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
 
     const request = store.clear();
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
 
-    alert('All saved data cleared!');
+    alert("All saved data cleared!");
   } catch (err) {
-    console.error('Error clearing data:', err);
+    console.error("Error clearing data:", err);
   }
 }
 
 // Export configuration to JSON file
-export async function exportConfigToFile(recorders) {
+export async function exportConfigToFile(recorders: any[]): Promise<void> {
   try {
     const config = {
       version: 1,
       exportDate: new Date().toISOString(),
-      recorders: []
+      recorders: [],
     };
 
     for (let i = 0; i < recorders.length; i++) {
@@ -219,48 +230,48 @@ export async function exportConfigToFile(recorders) {
         loopable: recorder.loopable,
         playingPressOption: recorder.playingPressOption,
         audioBuffer: audioBufferToStorable(recorder.trimmedBuffer),
-        hasAudio: recorder.trimmedBuffer != null
+        hasAudio: recorder.trimmedBuffer != null,
       };
       config.recorders.push(recorderData);
     }
 
     const jsonString = JSON.stringify(config, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
+    const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `looppad-config-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `looppad-config-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    alert('Configuration exported successfully!');
+    alert("Configuration exported successfully!");
   } catch (err) {
-    console.error('Error exporting config:', err);
-    alert('Error exporting configuration');
+    console.error("Error exporting config:", err);
+    alert("Error exporting configuration");
   }
 }
 
 // Import configuration from JSON file
-export async function importConfigFromFile(recorders) {
+export async function importConfigFromFile(recorders: any[]): Promise<void> {
   try {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
 
     input.onchange = async (e) => {
-      const file = e.target.files[0];
+      const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          const config = JSON.parse(event.target.result);
+          const config = JSON.parse((event.target as FileReader).result as string);
 
           if (!config.version || !config.recorders) {
-            alert('Invalid configuration file');
+            alert("Invalid configuration file");
             return;
           }
 
@@ -272,28 +283,34 @@ export async function importConfigFromFile(recorders) {
               // Restore settings
               recorder.loop = recorderData.loop || false;
               recorder.trimAudio = recorderData.trimAudio || false;
-              recorder.trimThreshold = recorderData.trimThreshold || TRIM_THRESH;
+              recorder.trimThreshold =
+                recorderData.trimThreshold || TRIM_THRESH;
               recorder.trimAudioLeft = recorderData.trimAudioLeft || false;
               recorder.trimAudioRight = recorderData.trimAudioRight || false;
               recorder.loopSync = recorderData.loopSync || false;
-              recorder.syncThreshold = recorderData.syncThreshold || SYNC_THRESH;
+              recorder.syncThreshold =
+                recorderData.syncThreshold || SYNC_THRESH;
               recorder.recordSyncStart = recorderData.recordSyncStart || false;
               recorder.recordSyncEnd = recorderData.recordSyncEnd || false;
               recorder.playSyncStart = recorderData.playSyncStart || false;
               recorder.loopable = recorderData.loopable || false;
-              recorder.playingPressOption = recorderData.playingPressOption || "stop";
+              recorder.playingPressOption =
+                recorderData.playingPressOption || "stop";
 
               // Restore audio if it exists
               if (recorderData.audioBuffer && recorderData.hasAudio) {
                 recorder.ctx = new AudioContext();
-                recorder.trimmedBuffer = storableToAudioBuffer(recorderData.audioBuffer, recorder.ctx);
-                recorder.recordingState = 'recorded';
+                recorder.trimmedBuffer = storableToAudioBuffer(
+                  recorderData.audioBuffer,
+                  recorder.ctx
+                );
+                recorder.recordingState = "recorded";
                 recorder.button.innerHTML = PLAYBUTTON;
                 recorder._updatePadNumber();
                 recorder.button.classList.add("has-audio");
               } else {
                 // Reset to not-recording state if no audio
-                recorder.recordingState = 'not-recording';
+                recorder.recordingState = "not-recording";
                 recorder.trimmedBuffer = null;
                 recorder.ctx = null;
                 recorder.showIcon();
@@ -304,10 +321,10 @@ export async function importConfigFromFile(recorders) {
             }
           }
 
-          alert('Configuration loaded successfully!');
+          alert("Configuration loaded successfully!");
         } catch (err) {
-          console.error('Error parsing config file:', err);
-          alert('Error loading configuration file');
+          console.error("Error parsing config file:", err);
+          alert("Error loading configuration file");
         }
       };
 
@@ -316,31 +333,34 @@ export async function importConfigFromFile(recorders) {
 
     input.click();
   } catch (err) {
-    console.error('Error importing config:', err);
-    alert('Error importing configuration');
+    console.error("Error importing config:", err);
+    alert("Error importing configuration");
   }
 }
 
 // Setup button event listeners - called from script.js after recorders are initialized
-export function setupButtonListeners(recorders) {
-  const clearButton = document.getElementById('clear-session');
-  const exportButton = document.getElementById('export-config');
-  const importButton = document.getElementById('import-config');
+export function setupButtonListeners(recorders: any[]): void {
+  const clearButton = document.getElementById("clear-session");
+  const exportButton = document.getElementById("export-config");
+  const importButton = document.getElementById("import-config");
 
   if (!clearButton || !exportButton || !importButton) {
-    console.error('Buttons not found in DOM!');
+    console.error("Buttons not found in DOM!");
     return;
   }
 
-  clearButton.addEventListener('click', () => {
-    if (confirm('Are you sure you want to clear all saved data? This cannot be undone.')) {
+  clearButton.addEventListener("click", () => {
+    if (
+      confirm(
+        "Are you sure you want to clear all saved data? This cannot be undone."
+      )
+    ) {
       clearAllSavedData();
       // Optionally reload the page to reset everything
       setTimeout(() => location.reload(), 500);
     }
   });
 
-  exportButton.addEventListener('click', () => exportConfigToFile(recorders));
-  importButton.addEventListener('click', () => importConfigFromFile(recorders));
+  exportButton.addEventListener("click", () => exportConfigToFile(recorders));
+  importButton.addEventListener("click", () => importConfigFromFile(recorders));
 }
-

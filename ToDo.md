@@ -7,6 +7,7 @@
 - [ ] Objectise Settings functionality
 - [ ] Make a metronome instance
 - [ ] Chucking Icons on the page (e.g looping...)
+
 - [ ] Audio audio level of Loops
 - [ ] Record Currently playing loops (Big one, alows building up samples!)
 - [ ] import samples onto the board!
