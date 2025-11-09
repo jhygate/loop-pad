@@ -2,15 +2,10 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-  root: '.', // Root is the project directory
-  publicDir: 'src', // Serve files from src as static assets
+  root: 'src', // Serve from src directory
+  publicDir: resolve(__dirname, 'public'), // Serve static assets from public
   build: {
-    outDir: 'dist',
+    outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-      },
-    },
   },
 });

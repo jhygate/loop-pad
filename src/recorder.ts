@@ -68,6 +68,7 @@ export class Recorder {
     this.appState = appState;
     this.clickCount = 0;
     this.resetting = false;
+    this.index = index;
 
     this.mediaRecorder = null; //Recorder object
     this.chunks = []; //Stores audio data
@@ -120,10 +121,13 @@ export class Recorder {
     } else if (this.recordingState === "playing") {
       this.button.innerHTML = PLAYINGBUTTON;
     }
+
+    const padNumberEl = this.button.querySelector(".pad-number");
+    padNumberEl.textContent = this.index.toString();
   }
 
   _bindUI() {
-    this.button.innerHTML = RECORDBUTTON;
+    this.showIcon();
 
     this.button.addEventListener("pointerdown", (e) => {
       e.preventDefault(); // Prevent default touch behavior
@@ -330,7 +334,7 @@ export class Recorder {
 
   _resetButton() {
     this.recordingState = "not-recording";
-    this.button.innerHTML = RECORDBUTTON;
+    this.showIcon();
 
     this.button.style.setProperty("filter", " drop-shadow(-4px 4px)");
     this.button.classList.remove("holding");
@@ -356,7 +360,7 @@ export class Recorder {
   _startRecording() {
     if (!this.mediaRecorder) return;
     this.recordingState = "recording";
-    this.button.innerHTML = RECORDINGBUTTON;
+    this.showIcon();
     this.button.classList.add("recording");
 
     const offset = getTimeToStart(this.syncThreshold, this.appState.recorders);
@@ -400,7 +404,7 @@ export class Recorder {
 
     setTimeout(() => {
       this.recordingState = "recorded";
-      this.button.innerHTML = PLAYBUTTON;
+      this.showIcon();
       this.button.classList.remove("recording");
       this.button.classList.add("has-audio");
       this.mediaRecorder.stop();
@@ -434,7 +438,7 @@ export class Recorder {
       console.log("STARTED");
 
       this.recordingState = "playing";
-      this.button.innerHTML = PLAYINGBUTTON;
+      this.showIcon();
 
       if (!this.trimmedBuffer || !this.ctx) return;
 
@@ -485,7 +489,7 @@ export class Recorder {
 
   _endAudio() {
     this._stopAudio();
-    this.button.innerHTML = PLAYBUTTON;
+    this.showIcon();
     this.recordingState = "recorded";
   }
 
