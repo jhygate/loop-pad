@@ -11,7 +11,7 @@ export type AppState = {
 const appState: AppState = {
   settingsClicked: false,
   settingsRecorder: null,
-  settingsModal: null, // Will be set by Settings class
+  settingsModal: null,
   recorders: [],
 };
 

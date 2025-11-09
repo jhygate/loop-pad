@@ -2,8 +2,6 @@ export const HOLD_TO_DELETE_TIME = 600;
 export const TRIM_THRESH = 0.05;
 export const SYNC_THRESH = 20000;
 
-
-
 export const RECORDBUTTON = `
   <div class="pad-inner">
     <div class="pad-number"></div>
@@ -27,6 +25,7 @@ export const RECORDINGBUTTON = `
 export const PLAYBUTTON = `
   <div class="pad-inner">
     <div class="pad-number"></div>
+    <div class="looping"></div>
     <div class="icon-wrapper">
       <div class="play-icon"></div>
     </div>
@@ -47,6 +46,7 @@ export const PLAYBUTTON = `
 export const PLAYINGBUTTON = `
   <div class="pad-inner">
     <div class="pad-number"></div>
+    <div class="looping"></div>
     <div class="icon-wrapper">
       <div class="play-icon"></div>
     </div>

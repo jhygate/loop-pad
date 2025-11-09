@@ -109,7 +109,6 @@ export class Recorder {
 
   showSettingsIcon() {
     this.button.innerHTML = SETTINGSBUTTON;
-    this._updatePadNumber();
   }
 
   showIcon() {
@@ -121,14 +120,6 @@ export class Recorder {
       this.button.innerHTML = PLAYBUTTON;
     } else if (this.recordingState === "playing") {
       this.button.innerHTML = PLAYINGBUTTON;
-    }
-    this._updatePadNumber();
-  }
-
-  _updatePadNumber() {
-    const padNumber = this.button.querySelector(".pad-number");
-    if (padNumber && this.index !== null) {
-      padNumber.textContent = (this.index + 1).toString();
     }
   }
 
@@ -341,7 +332,6 @@ export class Recorder {
   _resetButton() {
     this.recordingState = "not-recording";
     this.button.innerHTML = RECORDBUTTON;
-    this._updatePadNumber();
 
     this.button.style.setProperty("filter", " drop-shadow(-4px 4px)");
     this.button.classList.remove("holding");
@@ -368,7 +358,6 @@ export class Recorder {
     if (!this.mediaRecorder) return;
     this.recordingState = "recording";
     this.button.innerHTML = RECORDINGBUTTON;
-    this._updatePadNumber();
     this.button.classList.add("recording");
 
     const offset = getTimeToStart(this.syncThreshold, this.appState.recorders);
@@ -413,7 +402,6 @@ export class Recorder {
     setTimeout(() => {
       this.recordingState = "recorded";
       this.button.innerHTML = PLAYBUTTON;
-      this._updatePadNumber();
       this.button.classList.remove("recording");
       this.button.classList.add("has-audio");
       this.mediaRecorder.stop();
@@ -448,7 +436,6 @@ export class Recorder {
 
       this.recordingState = "playing";
       this.button.innerHTML = PLAYINGBUTTON;
-      this._updatePadNumber();
 
       if (!this.trimmedBuffer || !this.ctx) return;
 
@@ -500,7 +487,6 @@ export class Recorder {
   _endAudio() {
     this._stopAudio();
     this.button.innerHTML = PLAYBUTTON;
-    this._updatePadNumber();
     this.recordingState = "recorded";
   }
 
