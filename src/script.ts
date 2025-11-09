@@ -1,6 +1,5 @@
 import { loadAllRecorders, setupButtonListeners } from "./storage";
 import { Recorder } from "./recorder";
-import { Settings } from "./settings";
 
 export type AppState = {
   settingsClicked: boolean;
@@ -16,15 +15,15 @@ const appState: AppState = {
   recorders: [],
 };
 
-const recorder1 = new Recorder("btn1", "q", appState);
-const recorder2 = new Recorder("btn2", "w", appState);
-const recorder3 = new Recorder("btn3", "e", appState);
-const recorder4 = new Recorder("btn4", "a", appState);
-const recorder5 = new Recorder("btn5", "s", appState);
-const recorder6 = new Recorder("btn6", "d", appState);
-const recorder7 = new Recorder("btn7", "z", appState);
-const recorder8 = new Recorder("btn8", "x", appState);
-const recorder9 = new Recorder("btn9", "c", appState);
+const recorder1 = new Recorder("btn1", "q", appState, 1);
+const recorder2 = new Recorder("btn2", "w", appState, 2);
+const recorder3 = new Recorder("btn3", "e", appState, 3);
+const recorder4 = new Recorder("btn4", "a", appState, 4);
+const recorder5 = new Recorder("btn5", "s", appState, 5);
+const recorder6 = new Recorder("btn6", "d", appState, 6);
+const recorder7 = new Recorder("btn7", "z", appState, 7);
+const recorder8 = new Recorder("btn8", "x", appState, 8);
+const recorder9 = new Recorder("btn9", "c", appState, 9);
 
 appState.recorders = [
   recorder1,
@@ -38,24 +37,8 @@ appState.recorders = [
   recorder9,
 ];
 
-// Set index for each recorder for auto-save functionality
-appState.recorders.forEach((recorder, index) => {
-  recorder.index = index;
-  recorder._updatePadNumber();
-});
-
-// Load saved recordings immediately after recorders are created
 loadAllRecorders(appState.recorders);
 
-const settings = new Settings(appState);
-
-// Setup storage button event listeners after DOM is ready
-if (document.readyState === "loading") {
-  // DOM is still loading, wait for DOMContentLoaded
-  document.addEventListener("DOMContentLoaded", () => {
-    setupButtonListeners(appState.recorders);
-  });
-} else {
-  // DOM already loaded (module scripts are deferred), call immediately
+document.addEventListener("DOMContentLoaded", () => {
   setupButtonListeners(appState.recorders);
-}
+});

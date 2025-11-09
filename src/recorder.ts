@@ -22,7 +22,7 @@ export class Recorder {
   private button: HTMLElement;
   private key: string;
   private appState: any;
-  index: number | null;
+  private index: number;
   private clickCount: number;
   private resetting: boolean;
 
@@ -56,7 +56,7 @@ export class Recorder {
   stopDelay: number;
   startTrim: number;
 
-  constructor(buttonId: string, key: string, appState: any) {
+  constructor(buttonId: string, key: string, appState: any, index: number) {
     //Public
     this.recordingState = "not-recording";
     this.startTime = undefined;
