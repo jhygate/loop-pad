@@ -66,7 +66,6 @@ export class Recorder {
     this.button = document.getElementById(buttonId);
     this.key = key;
     this.appState = appState;
-    this.index = null; // Will be set after construction
     this.clickCount = 0;
     this.resetting = false;
 
