@@ -1,5 +1,7 @@
 - [x] Refactor Recorder objects (pull into own file)
 
+- [ ] System for clearly adding UI elements to recorder
+    - [ ] Highlight loop icon
 - [ ] THERE IS LOOP DRIFT MY LOOPS ARE OUT OF TIME!!
 
 - [ ] Refactor Recorder (clean)
@@ -7,6 +9,8 @@
 - [ ] Objectise Settings functionality
 - [ ] Make a metronome instance
 - [ ] Chucking Icons on the page (e.g looping...)
+
+- [ ] Better UI feedback, states fro waiting to play and waiting to finish recoridng fro loop Sycnc
 
 - [ ] Audio audio level of Loops
 - [ ] Record Currently playing loops (Big one, alows building up samples!)
