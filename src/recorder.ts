@@ -123,7 +123,7 @@ export class Recorder {
     }
 
     const padNumberEl = this.button.querySelector(".pad-number");
-    padNumberEl.textContent = this.index.toString();
+    padNumberEl.textContent = (this.index + 1).toString();
 
     const loopingEl = this.button.querySelector(".looping");
     if (loopingEl && this.loopable) {

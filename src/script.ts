@@ -16,15 +16,15 @@ const appState: AppState = {
   recorders: [],
 };
 
-const recorder1 = new Recorder("btn1", "q", appState, 1);
-const recorder2 = new Recorder("btn2", "w", appState, 2);
-const recorder3 = new Recorder("btn3", "e", appState, 3);
-const recorder4 = new Recorder("btn4", "a", appState, 4);
-const recorder5 = new Recorder("btn5", "s", appState, 5);
-const recorder6 = new Recorder("btn6", "d", appState, 6);
-const recorder7 = new Recorder("btn7", "z", appState, 7);
-const recorder8 = new Recorder("btn8", "x", appState, 8);
-const recorder9 = new Recorder("btn9", "c", appState, 9);
+const recorder1 = new Recorder("btn1", "q", appState, 0);
+const recorder2 = new Recorder("btn2", "w", appState, 1);
+const recorder3 = new Recorder("btn3", "e", appState, 2);
+const recorder4 = new Recorder("btn4", "a", appState, 3);
+const recorder5 = new Recorder("btn5", "s", appState, 4);
+const recorder6 = new Recorder("btn6", "d", appState, 5);
+const recorder7 = new Recorder("btn7", "z", appState, 6);
+const recorder8 = new Recorder("btn8", "x", appState, 7);
+const recorder9 = new Recorder("btn9", "c", appState, 8);
 
 appState.recorders = [
   recorder1,
