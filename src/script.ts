@@ -1,5 +1,6 @@
 import { loadAllRecorders, setupButtonListeners } from "./storage";
 import { Recorder } from "./recorder";
+import { Settings } from "./settings";
 
 export type AppState = {
   settingsClicked: boolean;
@@ -38,6 +39,8 @@ appState.recorders = [
 ];
 
 loadAllRecorders(appState.recorders);
+
+const settings = new Settings(appState);
 
 document.addEventListener("DOMContentLoaded", () => {
   setupButtonListeners(appState.recorders);

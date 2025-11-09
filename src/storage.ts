@@ -32,7 +32,9 @@ export function openDB(): Promise<IDBDatabase> {
 }
 
 // Convert AudioBuffer to storable format
-export function audioBufferToStorable(audioBuffer: AudioBuffer | null): StorableAudioBuffer | null {
+export function audioBufferToStorable(
+  audioBuffer: AudioBuffer | null
+): StorableAudioBuffer | null {
   if (!audioBuffer) return null;
 
   const channels = [];
@@ -50,7 +52,10 @@ export function audioBufferToStorable(audioBuffer: AudioBuffer | null): Storable
 }
 
 // Convert stored format back to AudioBuffer
-export function storableToAudioBuffer(storable: StorableAudioBuffer | null, audioContext: AudioContext): AudioBuffer | null {
+export function storableToAudioBuffer(
+  storable: StorableAudioBuffer | null,
+  audioContext: AudioContext
+): AudioBuffer | null {
   if (!storable) return null;
 
   const audioBuffer = audioContext.createBuffer(
@@ -67,7 +72,10 @@ export function storableToAudioBuffer(storable: StorableAudioBuffer | null, audi
 }
 
 // Save single recorder to IndexedDB
-export async function saveRecorderToIndexedDB(recorder: any, index: number): Promise<void> {
+export async function saveRecorderToIndexedDB(
+  recorder: any,
+  index: number
+): Promise<void> {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -125,7 +133,10 @@ export async function saveAllRecorders(recorders: any[]): Promise<void> {
 }
 
 // Load single recorder from IndexedDB
-export async function loadRecorderFromIndexedDB(recorder: any, index: number): Promise<boolean> {
+export async function loadRecorderFromIndexedDB(
+  recorder: any,
+  index: number
+): Promise<boolean> {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, "readonly");
@@ -162,7 +173,6 @@ export async function loadRecorderFromIndexedDB(recorder: any, index: number): P
       );
       recorder.recordingState = "recorded";
       recorder.button.innerHTML = PLAYBUTTON;
-      recorder._updatePadNumber();
       recorder.button.classList.add("has-audio");
     }
 
@@ -268,7 +278,9 @@ export async function importConfigFromFile(recorders: any[]): Promise<void> {
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          const config = JSON.parse((event.target as FileReader).result as string);
+          const config = JSON.parse(
+            (event.target as FileReader).result as string
+          );
 
           if (!config.version || !config.recorders) {
             alert("Invalid configuration file");
@@ -306,7 +318,6 @@ export async function importConfigFromFile(recorders: any[]): Promise<void> {
                 );
                 recorder.recordingState = "recorded";
                 recorder.button.innerHTML = PLAYBUTTON;
-                recorder._updatePadNumber();
                 recorder.button.classList.add("has-audio");
               } else {
                 // Reset to not-recording state if no audio

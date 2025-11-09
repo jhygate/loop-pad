@@ -124,6 +124,12 @@ export class Recorder {
 
     const padNumberEl = this.button.querySelector(".pad-number");
     padNumberEl.textContent = this.index.toString();
+
+    const loopingEl = this.button.querySelector(".looping");
+    if (loopingEl && this.loopable) {
+      loopingEl.innerHTML =
+        '<img src="/icons/loop.svg" style="width: 20px; height: 20px;">';
+    }
   }
 
   _bindUI() {
