@@ -3,4 +3,5 @@ export class RecorderSettings {
   public recordSyncEnd: boolean;
   public playingPressBehavior: "stop" | "restart";
   public playSyncStart: boolean;
+  public loopable: boolean;
 }

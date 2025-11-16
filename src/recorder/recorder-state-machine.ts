@@ -83,7 +83,7 @@ function getRecordingStateDetails(
   };
 }
 
-function getWaitingToEndRecordingStateDetails(
+function getWaitingToEndRecordingStateDetails( //Shall we fill white silence or continue recording (silence most likely)
   currentState: RecorderState,
   event: RecorderEvent,
   ctx: RecorderContext
@@ -101,8 +101,15 @@ function getRecordedStateDetails(
   event: RecorderEvent,
   ctx: RecorderContext
 ): RecorderStateDetails {
-  if (!["held", "press"].includes(event))
+  if (!["held", "press", "double-press"].includes(event))
     return getCurrentStateDetails(currentState, ctx);
+
+  if (event === "double-press" && ctx.settings.loopable == true)
+    return {
+      state: currentState,
+      looping: !ctx.looping,
+    };
+
   if (event === "held")
     return {
       state: "deleting",
@@ -121,8 +128,15 @@ function getWaitingToPlayStateDetails(
   event: RecorderEvent,
   ctx: RecorderContext
 ): RecorderStateDetails {
-  if (!["ready-to-play"].includes(event))
+  if (!["ready-to-play", "double-press"].includes(event))
     return getCurrentStateDetails(currentState, ctx);
+
+  if (event === "double-press" && ctx.settings.loopable == true)
+    return {
+      state: currentState,
+      looping: !ctx.looping,
+    };
+
   return {
     state: "ready-to-play",
     looping: ctx.looping,
@@ -134,8 +148,15 @@ function getReadyToPlayStateDetails(
   event: RecorderEvent,
   ctx: RecorderContext
 ): RecorderStateDetails {
-  if (!["start-playing"].includes(event))
+  if (!["start-playing", "double-press"].includes(event))
     return getCurrentStateDetails(currentState, ctx);
+
+  if (event === "double-press" && ctx.settings.loopable == true)
+    return {
+      state: currentState,
+      looping: !ctx.looping,
+    };
+
   return {
     state: "playing",
     looping: ctx.looping,
@@ -147,8 +168,15 @@ function getPlayingStateDetails(
   event: RecorderEvent,
   ctx: RecorderContext
 ): RecorderStateDetails {
-  if (!["held", "press", "loop-end"].includes(event))
+  if (!["held", "press", "loop-end", "double-press"].includes(event))
     return getCurrentStateDetails(currentState, ctx);
+
+  if (event === "double-press" && ctx.settings.loopable == true)
+    return {
+      state: currentState,
+      looping: !ctx.looping,
+    };
+
   if (event === "held")
     return {
       state: "deleting",
@@ -177,9 +205,10 @@ function getDeletingStateDetails(
 ): RecorderStateDetails {
   if (!["deleted"].includes(event))
     return getCurrentStateDetails(currentState, ctx);
+
   return {
     state: "empty",
-    looping: ctx.looping,
+    looping: false,
   };
 }
 
@@ -188,6 +217,13 @@ function getNextStateDetails(
   event: RecorderEvent,
   ctx: RecorderContext
 ): RecorderStateDetails {
+  if (
+    ["press", "double-press", "held"].includes(event) &&
+    ctx.settingsPressed === true
+  ) {
+    return getCurrentStateDetails(currentState, ctx);
+  }
+
   switch (currentState) {
     case "empty":
       return getEmptyStateDetails(currentState, event, ctx);
