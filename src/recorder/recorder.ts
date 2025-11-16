@@ -4,7 +4,8 @@ import {
   RecorderEvent,
 } from "./recorder-state-machine";
 import { RecorderSettings } from "./recorder-settings";
-import { DOUBLE_CLICK_TIME, HOLD_TO_DELETE_TIME } from "./constants";
+import { RecorderViewHandler } from "./recorder-view";
+import { DOUBLE_CLICK_TIME, HOLD_TO_DELETE_TIME } from "./recorder-constants";
 
 export type RecorderContext = {
   settingsPressed: boolean;
@@ -16,10 +17,11 @@ export type RecorderContext = {
 // - Implement View (Icons, animation handling)
 // - Implement StateActioner (SyncActioner, AudioActioner)
 // - Implement Settings
-// - Figure out how context (e.g looping is managed, state machine)
 
 export class Recorder {
   private stateMachine: RecorderStateMachine;
+  private viewHandler: RecorderViewHandler;
+
   private settings: RecorderSettings;
 
   private htmlElement: HTMLElement;
@@ -29,25 +31,29 @@ export class Recorder {
 
   private clickCount: number;
 
-  public looping: boolean;
   private settingsPressed;
 
   constructor(buttonId: string) {
     this.stateMachine = new RecorderStateMachine();
 
     this.htmlElement = document.getElementById(buttonId);
+    this.viewHandler = new RecorderViewHandler(this.htmlElement);
 
     this.holdTimerId = -1;
     this.held = false;
 
-    this.looping = false;
     this.settingsPressed = false;
 
     this.bindUI();
+    this.render();
   }
 
   public get state(): RecorderState {
     return this.stateMachine.state;
+  }
+
+  public get looping(): boolean {
+    return this.stateMachine.looping;
   }
 
   private bindUI() {
@@ -84,5 +90,9 @@ export class Recorder {
       settings: this.settings,
     };
     this.stateMachine.transition(event, recorderContext);
+  }
+
+  private render() {
+    this.viewHandler.render();
   }
 }

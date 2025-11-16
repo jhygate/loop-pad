@@ -8,143 +8,45 @@
     <script type="module" src="./script.ts"></script>
   </head>
   <body>
-    <div class="container">
-      <header class="app-header">
-        <h1 class="app-title">LoopPad</h1>
-        <p class="app-subtitle">Loopy Sampler</p>
-      </header>
+    <header class="app-header">
+      <h1 class="app-title">LoopPad</h1>
+      <p class="app-subtitle">Loopy Sampler</p>
+    </header>
 
-      <div class="main-content">
-        <div class="grid-section">
-          <div class="grid">
-            <button class="pad" id="btn1">
-              <div class="pad-inner">
-                <div class="pad-number">1</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn2">
-              <div class="pad-inner">
-                <div class="pad-number">2</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn3">
-              <div class="pad-inner">
-                <div class="pad-number">3</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn4">
-              <div class="pad-inner">
-                <div class="pad-number">4</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn5">
-              <div class="pad-inner">
-                <div class="pad-number">5</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn6">
-              <div class="pad-inner">
-                <div class="pad-number">6</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn7">
-              <div class="pad-inner">
-                <div class="pad-number">7</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn8">
-              <div class="pad-inner">
-                <div class="pad-number">8</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-
-            <button class="pad" id="btn9">
-              <div class="pad-inner">
-                <div class="pad-number">9</div>
-                <div class="icon-wrapper">
-                  <div class="record-icon"></div>
-                </div>
-                <div class="pad-status">Empty</div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <div class="side-panel">
-          <div class="panel-card">
-            <h3>Settings</h3>
-            <div class="control-group">
-              <button class="control-btn" id="settings-icon">
-                <span>⚙️</span>
-                Pad Settings
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3>Actions</h3>
-            <div class="control-group">
-              <button class="control-btn primary" id="export-config">
-                <span>💾</span>
-                Save Project
-              </button>
-              <button class="control-btn" id="import-config">
-                <span>📁</span>
-                Load Project
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3>System</h3>
-            <div class="control-group">
-              <button class="control-btn danger" id="clear-session">
-                <span>🗑️</span>
-                Clear All Pads
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="grid">
+      <div class="pad" id="btn1"></div>
+      <div class="pad" id="btn2"></div>
+      <div class="pad" id="btn3"></div>
+      <div class="pad" id="btn4"></div>
+      <div class="pad" id="btn5"></div>
+      <div class="pad" id="btn6"></div>
+      <div class="pad" id="btn7"></div>
+      <div class="pad" id="btn8"></div>
+      <div class="pad" id="btn9"></div>
     </div>
+
+    <h3>Settings</h3>
+    <button class="control-btn" id="settings-icon">
+        <span>⚙️</span>
+        Pad Settings
+    </button>
+
+    <h3>Actions</h3>
+    <button class="control-btn primary" id="export-config">
+        <span>💾</span>
+        Save Project
+    </button>
+
+    <button class="control-btn" id="import-config">
+        <span>📁</span>
+        Load Project
+    </button>
+
+    <h3>System</h3>
+    <div class="control-group">
+    <button class="control-btn danger" id="clear-session">
+        <span>🗑️</span>
+        Clear All Pads
+    </button>
   </body>
 </html>

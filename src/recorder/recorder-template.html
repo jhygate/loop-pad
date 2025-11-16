@@ -1,0 +1,45 @@
+<div class="recorder-container">
+  <div class="recorder-header">
+    <div class="recorder-number">1</div>
+    <div class="recorder-looping">x</div>
+  </div>
+  <div class="recorder-icon">Play</div>
+  <div class="recorder-progress">------</div>
+</div>
+
+<style>
+  .recorder-container {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    border-style: solid;
+    justify-content: space-between;
+  }
+
+  .recorder-header {
+    height: 100px;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .recorder-number {
+  }
+
+  .recorder-looping {
+  }
+
+  .recorder-icon {
+    align-self: center;
+    border-style: solid;
+  }
+
+  .recorder-progress {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* pushes content to bottom */
+    height: 100px;
+  }
+</style>
