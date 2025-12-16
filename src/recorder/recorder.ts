@@ -2,10 +2,13 @@ import {
   RecorderStateMachine,
   RecorderState,
   RecorderEvent,
-} from "./recorder-state-machine";
-import { RecorderSettings } from "./recorder-settings";
-import { RecorderViewHandler } from "./recorder-view";
-import { DOUBLE_CLICK_TIME, HOLD_TO_DELETE_TIME } from "./recorder-constants";
+} from "./recorder-state-machine.js";
+import { RecorderSettings } from "./recorder-settings.js";
+import { RecorderViewHandler } from "./recorder-view.js";
+import {
+  DOUBLE_CLICK_TIME,
+  HOLD_TO_DELETE_TIME,
+} from "./recorder-constants.js";
 
 export type RecorderContext = {
   settingsPressed: boolean;
@@ -40,9 +43,11 @@ export class Recorder {
     this.viewHandler = new RecorderViewHandler(this.htmlElement);
 
     this.holdTimerId = -1;
+    this.clickCount = 0;
     this.held = false;
 
     this.settingsPressed = false;
+    this.settings = new RecorderSettings();
 
     this.bindUI();
     this.render();
@@ -60,7 +65,10 @@ export class Recorder {
     this.htmlElement.addEventListener("pointerdown", (e) => {
       this.clickCount += 1;
 
-      setTimeout(() => (this.clickCount = 0), DOUBLE_CLICK_TIME);
+      setTimeout(() => {
+        this.clickCount = 0;
+        console.log("rest timer");
+      }, DOUBLE_CLICK_TIME);
 
       this.holdTimerId = setTimeout(() => {
         this.held = true;
@@ -73,6 +81,7 @@ export class Recorder {
         this.held = false;
         return;
       }
+      console.log(this.clickCount);
 
       clearTimeout(this.holdTimerId);
       if (this.clickCount == 1) {
@@ -84,15 +93,17 @@ export class Recorder {
   }
 
   private transitionState(event: RecorderEvent) {
+    console.log(event);
     const recorderContext: RecorderContext = {
       settingsPressed: this.settingsPressed,
       looping: this.looping,
       settings: this.settings,
     };
     this.stateMachine.transition(event, recorderContext);
+    this.render();
   }
 
-  private render() {
-    this.viewHandler.render();
+  public render() {
+    this.viewHandler.render(this.state);
   }
 }

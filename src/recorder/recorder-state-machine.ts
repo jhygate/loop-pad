@@ -1,4 +1,4 @@
-import { type RecorderContext } from "./recorder";
+import { type RecorderContext } from "./recorder.js";
 
 export type RecorderState =
   | "empty"
