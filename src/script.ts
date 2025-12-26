@@ -1,11 +1,13 @@
 import { Recorder } from "./recorder/recorder.js";
 
 class main {
-  recorder: Recorder;
+  recorder1: Recorder;
+  recorder2: Recorder;
 
   constructor() {
     console.log("hello world");
-    this.recorder = new Recorder("recorder-box");
+    this.recorder1 = new Recorder("recorder-box1");
+    this.recorder2 = new Recorder("recorder-box2");
   }
 }
 
