@@ -27,231 +27,74 @@ export type RecorderEvent =
   | "start-playing"
   | "deleted";
 
-//Access to settings - pass in live reference.
+type Transition = (ctx: RecorderContext, looping: boolean) => RecorderState;
 
-//ToDo:
-// - Handle double press
-//      - Where does looping state live?
-//- Handle settings button presses
+const table: Record<RecorderState, Partial<Record<RecorderEvent, Transition>>> = {
+  "empty": {
+    "press": (ctx) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording",
+  },
+  "waiting-to-record": {
+    "ready-to-record": () => "recording",
+  },
+  "recording": {
+    "press": (ctx) => ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "recorded",
+  },
+  "waiting-to-end-recording": {
+    "ready-to-end-recording": () => "recorded",
+  },
+  "recorded": {
+    "press": (ctx) => ctx.settings.playSyncStart ? "waiting-to-play" : "ready-to-play",
+  },
+  "waiting-to-play": {
+    "ready-to-play": () => "ready-to-play",
+  },
+  "ready-to-play": {
+    "start-playing": () => "playing",
+  },
+  "playing": {
+    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "ready-to-play",
+    "loop-end": (_, looping) => looping ? "ready-to-play" : "recorded",
+  },
+  "deleting": {
+    "deleted": () => "empty",
+  },
+};
 
-function getCurrentStateDetails(
-  currentState: RecorderState,
-  ctx: RecorderContext
-) {
-  return {
-    state: currentState,
-    looping: ctx.looping,
-  };
-}
+const HELD_STATES: RecorderState[] = ["recorded", "playing"];
 
-function getEmptyStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["press"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-  return {
-    state: ctx.settings.recordSyncStart ? "waiting-to-record" : "recording",
-    looping: ctx.looping,
-  };
-}
-
-function getWaitingToRecordStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["ready-to-record"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-  return {
-    state: "recording",
-    looping: ctx.looping,
-  };
-}
-
-function getRecordingStateDetails(
+function getCrossCuttingTransition(
   currentState: RecorderState,
   event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["press"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-  return {
-    state: ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "recorded",
-    looping: ctx.looping,
-  };
-}
+  ctx: RecorderContext,
+  looping: boolean
+): RecorderStateDetails | null {
+  if (event === "double-press" && ctx.settings.loopable)
+    return { state: currentState, looping: !looping };
 
-function getWaitingToEndRecordingStateDetails( //Shall we fill white silence or continue recording (silence most likely)
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["ready-to-end-recording"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-  return {
-    state: "recorded",
-    looping: ctx.looping,
-  };
-}
+  if (event === "held" && HELD_STATES.includes(currentState))
+    return { state: "deleting", looping };
 
-function getRecordedStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["held", "press", "double-press"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-
-  if (event === "double-press" && ctx.settings.loopable == true)
-    return {
-      state: currentState,
-      looping: !ctx.looping,
-    };
-
-  if (event === "held")
-    return {
-      state: "deleting",
-      looping: ctx.looping,
-    };
-  if (event === "press")
-    return {
-      state: ctx.settings.playSyncStart ? "waiting-to-play" : "ready-to-play",
-      looping: ctx.looping,
-    };
-  return getCurrentStateDetails(currentState, ctx);
-}
-
-function getWaitingToPlayStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["ready-to-play", "double-press"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-
-  if (event === "double-press" && ctx.settings.loopable == true)
-    return {
-      state: currentState,
-      looping: !ctx.looping,
-    };
-
-  return {
-    state: "ready-to-play",
-    looping: ctx.looping,
-  };
-}
-
-function getReadyToPlayStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["start-playing", "double-press"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-
-  if (event === "double-press" && ctx.settings.loopable == true)
-    return {
-      state: currentState,
-      looping: !ctx.looping,
-    };
-
-  return {
-    state: "playing",
-    looping: ctx.looping,
-  };
-}
-
-function getPlayingStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["held", "press", "loop-end", "double-press"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-
-  if (event === "double-press" && ctx.settings.loopable == true)
-    return {
-      state: currentState,
-      looping: !ctx.looping,
-    };
-
-  if (event === "held")
-    return {
-      state: "deleting",
-      looping: ctx.looping,
-    };
-  if (event === "press")
-    return {
-      state:
-        ctx.settings.playingPressBehavior === "stop"
-          ? "recorded"
-          : "ready-to-play",
-      looping: ctx.looping,
-    };
-  if (event === "loop-end")
-    return {
-      state: ctx.looping ? "ready-to-play" : "recorded",
-      looping: ctx.looping,
-    };
-  return getCurrentStateDetails(currentState, ctx);
-}
-
-function getDeletingStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext
-): RecorderStateDetails {
-  if (!["deleted"].includes(event))
-    return getCurrentStateDetails(currentState, ctx);
-
-  return {
-    state: "empty",
-    looping: false,
-  };
+  return null;
 }
 
 function getNextStateDetails(
   currentState: RecorderState,
   event: RecorderEvent,
-  ctx: RecorderContext
+  ctx: RecorderContext,
+  looping: boolean
 ): RecorderStateDetails {
-  if (
-    ["press", "double-press", "held"].includes(event) &&
-    ctx.settingsPressed === true
-  ) {
-    return getCurrentStateDetails(currentState, ctx);
+  if (ctx.settingsPressed && ["press", "double-press", "held"].includes(event))
+    return { state: currentState, looping };
+
+  const crossCutting = getCrossCuttingTransition(currentState, event, ctx, looping);
+  if (crossCutting) {
+    return { state: crossCutting.state, looping: crossCutting.looping };
   }
 
-  switch (currentState) {
-    case "empty":
-      return getEmptyStateDetails(currentState, event, ctx);
+  const nextState = table[currentState]?.[event]?.(ctx, looping) ?? currentState;
+  const nextLooping = nextState === "empty" ? false : looping;
 
-    case "waiting-to-record":
-      return getWaitingToRecordStateDetails(currentState, event, ctx);
-
-    case "recording":
-      return getRecordingStateDetails(currentState, event, ctx);
-
-    case "waiting-to-end-recording":
-      return getWaitingToEndRecordingStateDetails(currentState, event, ctx);
-
-    case "recorded":
-      return getRecordedStateDetails(currentState, event, ctx);
-
-    case "waiting-to-play":
-      return getWaitingToPlayStateDetails(currentState, event, ctx);
-
-    case "ready-to-play":
-      return getReadyToPlayStateDetails(currentState, event, ctx);
-
-    case "playing":
-      return getPlayingStateDetails(currentState, event, ctx);
-
-    case "deleting":
-      return getDeletingStateDetails(currentState, event, ctx);
-  }
+  return { state: nextState, looping: nextLooping };
 }
 
 export class RecorderStateMachine {
@@ -264,8 +107,8 @@ export class RecorderStateMachine {
   }
 
   public transition(event: RecorderEvent, ctx: RecorderContext) {
-    const stateDetails = getNextStateDetails(this.state, event, ctx);
-    this.state = stateDetails.state;
-    this.looping = stateDetails.looping;
+    const next = getNextStateDetails(this.state, event, ctx, this.looping);
+    this.state = next.state;
+    this.looping = next.looping;
   }
 }

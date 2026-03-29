@@ -12,7 +12,6 @@ import {
 
 export type RecorderContext = {
   settingsPressed: boolean;
-  looping: boolean;
   settings: RecorderSettings;
 };
 
@@ -96,7 +95,6 @@ export class Recorder {
     console.log(event);
     const recorderContext: RecorderContext = {
       settingsPressed: this.settingsPressed,
-      looping: this.looping,
       settings: this.settings,
     };
     this.stateMachine.transition(event, recorderContext);

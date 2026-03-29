@@ -2,6 +2,7 @@
 // needs acces to FSM - looping/display
 // needs access to audfio object for animations.
 
+import { RecorderContext } from "./recorder";
 import { RecorderState } from "./recorder-state-machine";
 
 function getFilledTemplate(
@@ -60,7 +61,7 @@ export class RecorderViewHandler {
     this.htmlElement = htmlElement;
   }
 
-  public render(state: string) {
-    this.htmlElement.innerHTML = getFilledTemplate(1, true, "empty", 0);
+  public render(state: RecorderState) {
+    this.htmlElement.innerHTML = getFilledTemplate(1, true, state, 0);
   }
 }
