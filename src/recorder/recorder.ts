@@ -34,7 +34,7 @@ export class Recorder {
 
   private clickCount: number;
 
-  private settingsPressed;
+  private settingsPressed: boolean;
 
   constructor(buttonId: string) {
     this.stateMachine = new RecorderStateMachine();
