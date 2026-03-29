@@ -12,6 +12,9 @@ import {
 } from "./pad-constants.js";
 import { PadAudioHandler } from "./pad-audio.js";
 
+
+import { GlobalState } from "../script.js";
+
 export type PadContext = {
   settingsPressed: boolean;
   settings: PadSettings;
@@ -36,22 +39,22 @@ export class Pad {
 
   private clickCount: number;
 
-  private settingsPressed: boolean;
+  private globalState: GlobalState
 
-  constructor(buttonId: string, stream: MediaStream, audioContext: AudioContext) {
+  constructor(buttonId: string, stream: MediaStream, audioContext: AudioContext, globalState: GlobalState) {
     this.stateMachine = new PadStateMachine();
 
     this.htmlElement = document.getElementById(buttonId);
     this.viewHandler = new PadViewHandler(this.htmlElement);
 
-    this.audoHandler = new PadAudioHandler(stream, audioContext);
+    this.audoHandler = new PadAudioHandler(stream, audioContext, this.htmlElement);
 
     this.holdTimerId = -1;
     this.clickCount = 0;
     this.held = false;
 
-    this.settingsPressed = false;
     this.settings = new PadSettings();
+    this.globalState = globalState;
 
     this.bindUI();
     this.setupListeners();
@@ -100,19 +103,24 @@ export class Pad {
       const customEvent = e as CustomEvent<ControllerPadEvent>;
       this.transitionState(customEvent.detail);
     });
+
+    document.addEventListener('global-state-update', () => {
+      this.render();
+    });
   }
 
   private transitionState(event: PadEvent) {
     const padContext: PadContext = {
-      settingsPressed: this.settingsPressed,
+      settingsPressed: this.globalState.settingsPressed,
       settings: this.settings,
     };
+
     this.stateMachine.transition(event, padContext);
     this.audoHandler.handleStateChange(this.state);
     this.render();
   }
 
   public render() {
-    this.viewHandler.render(this.state);
+    this.viewHandler.render(this.state, this.globalState.settingsPressed);
   }
 }

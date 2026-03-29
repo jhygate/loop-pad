@@ -4,13 +4,17 @@ export class PadAudioHandler {
   private mediaRecorder: MediaRecorder;
   private chunks: Blob[];
 
+  private element: HTMLElement;
+
   private audioContext: AudioContext;
   private audioBuffer: AudioBuffer;
   private sourceNode: AudioBufferSourceNode;
 
-  constructor(stream: MediaStream, audioContext: AudioContext) {
+  constructor(stream: MediaStream, audioContext: AudioContext, element: HTMLElement) {
     this.mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 })
     this.chunks = [];
+
+    this.element = element;
 
     this.audioContext = audioContext;
     this.audioBuffer = null;
@@ -46,14 +50,17 @@ export class PadAudioHandler {
     }
     await this.audioContext.resume();
 
-    console.log("state:", this.audioContext.state);
-    console.log("buffer duration:", this.audioBuffer?.duration);
-    console.log("buffer sampleRate:", this.audioBuffer?.sampleRate);
-
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
     this.sourceNode.connect(this.audioContext.destination);
     this.sourceNode.start();
+
+
+    this.sourceNode.onended = () => {
+      this.element.dispatchEvent(new CustomEvent('pad-update', {
+        detail: 'loop-end'
+      }))
+    }
   }
 
   public stopPlaying() {
@@ -62,15 +69,26 @@ export class PadAudioHandler {
 
   }
 
+  private deleteRecording() {
+    this.audioBuffer = null;
+    this.sourceNode = null;
+  }
+
   public handleStateChange(padState: PadState) {
-    if (padState == "recording") {
-      this.startRecording();
-    }
-    if (padState == "recorded") {
-      this.stopRecording();
-    }
-    if (padState == "playing") {
-      this.startPlaying();
+    switch (padState) {
+      case "empty":
+        this.deleteRecording();
+        break
+      case "recording":
+        this.startRecording();
+        break
+      case "recorded":
+        this.stopRecording();
+        this.stopPlaying();
+        break
+      case "playing":
+        this.startPlaying();
+        break;
     }
   }
 

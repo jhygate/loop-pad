@@ -7,9 +7,7 @@ export type PadState =
   | "waiting-to-end-recording"
   | "recorded"
   | "waiting-to-play"
-  | "ready-to-play"
   | "playing"
-  | "deleting";
 
 export type PadStateDetails = {
   state: PadState;
@@ -26,8 +24,6 @@ export type ControllerPadEvent =
   | "ready-to-record"
   | "ready-to-end-recording"
   | "ready-to-play"
-  | "start-playing"
-  | "deleted";
 
 export type PadEvent =
   UserPadEvent | ControllerPadEvent
@@ -52,17 +48,11 @@ const table: Record<PadState, Partial<Record<PadEvent, Transition>>> = {
     "press": (ctx) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing",
   },
   "waiting-to-play": {
-    "ready-to-play": () => "ready-to-play",
-  },
-  "ready-to-play": {
-    "start-playing": () => "playing",
+    "ready-to-play": (_) => "playing"
   },
   "playing": {
-    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "ready-to-play",
-    "loop-end": (_, looping) => looping ? "ready-to-play" : "recorded",
-  },
-  "deleting": {
-    "deleted": () => "empty",
+    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "recorded",
+    "loop-end": (_, looping) => looping ? "playing" : "recorded",
   },
 };
 
@@ -78,7 +68,7 @@ function getCrossCuttingTransition(
     return { state: currentState, looping: !looping };
 
   if (event === "held" && HELD_STATES.includes(currentState))
-    return { state: "deleting", looping };
+    return { state: "empty", looping };
 
   return null;
 }
@@ -109,7 +99,7 @@ export class PadStateMachine {
 
   constructor() {
     this.state = "empty";
-    this.looping = false;
+    this.looping = true;
   }
 
   public transition(event: PadEvent, ctx: PadContext) {

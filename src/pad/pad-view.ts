@@ -8,7 +8,8 @@ function getFilledTemplate(
   pad_number: number,
   pad_looping: boolean,
   pad_state: PadState,
-  pad_progress: number
+  pad_progress: number,
+  setting_pressed: boolean
 ) {
   return `
     <div class="pad-container">
@@ -16,7 +17,7 @@ function getFilledTemplate(
         <div class="pad-number">${pad_number}</div>
         <div class="pad-looping">${pad_looping}</div>
       </div>
-      <div class="pad-icon">${pad_state}</div>
+      <div class="pad-icon">${setting_pressed ? "settings" : pad_state}</div>
       <div class="pad-progress">${pad_progress}</div>
     </div>
 
@@ -60,7 +61,7 @@ export class PadViewHandler {
     this.htmlElement = htmlElement;
   }
 
-  public render(state: PadState) {
-    this.htmlElement.innerHTML = getFilledTemplate(1, true, state, 0);
+  public render(state: PadState, settings_pressed) {
+    this.htmlElement.innerHTML = getFilledTemplate(1, true, state, 0, settings_pressed);
   }
 }

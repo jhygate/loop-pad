@@ -10,6 +10,6 @@ export class PadSettings {
     this.recordSyncEnd = false;
     this.playingPressBehavior = "stop";
     this.playSyncStart = false;
-    this.loopable = false;
+    this.loopable = true;
   }
 }
