@@ -1,6 +1,6 @@
-import { type RecorderContext } from "./recorder.js";
+import { type PadContext } from "./pad.js";
 
-export type RecorderState =
+export type PadState =
   | "empty"
   | "waiting-to-record"
   | "recording"
@@ -11,15 +11,17 @@ export type RecorderState =
   | "playing"
   | "deleting";
 
-export type RecorderStateDetails = {
-  state: RecorderState;
+export type PadStateDetails = {
+  state: PadState;
   looping: boolean;
 };
 
-export type RecorderEvent =
+export type UserPadEvent =
   | "press"
   | "double-press"
   | "held"
+
+export type ControllerPadEvent =
   | "loop-end"
   | "ready-to-record"
   | "ready-to-end-recording"
@@ -27,9 +29,13 @@ export type RecorderEvent =
   | "start-playing"
   | "deleted";
 
-type Transition = (ctx: RecorderContext, looping: boolean) => RecorderState;
+export type PadEvent =
+  UserPadEvent | ControllerPadEvent
 
-const table: Record<RecorderState, Partial<Record<RecorderEvent, Transition>>> = {
+
+type Transition = (ctx: PadContext, looping: boolean) => PadState;
+
+const table: Record<PadState, Partial<Record<PadEvent, Transition>>> = {
   "empty": {
     "press": (ctx) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording",
   },
@@ -43,7 +49,7 @@ const table: Record<RecorderState, Partial<Record<RecorderEvent, Transition>>> =
     "ready-to-end-recording": () => "recorded",
   },
   "recorded": {
-    "press": (ctx) => ctx.settings.playSyncStart ? "waiting-to-play" : "ready-to-play",
+    "press": (ctx) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing",
   },
   "waiting-to-play": {
     "ready-to-play": () => "ready-to-play",
@@ -60,14 +66,14 @@ const table: Record<RecorderState, Partial<Record<RecorderEvent, Transition>>> =
   },
 };
 
-const HELD_STATES: RecorderState[] = ["recorded", "playing"];
+const HELD_STATES: PadState[] = ["recorded", "playing"];
 
 function getCrossCuttingTransition(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext,
+  currentState: PadState,
+  event: PadEvent,
+  ctx: PadContext,
   looping: boolean
-): RecorderStateDetails | null {
+): PadStateDetails | null {
   if (event === "double-press" && ctx.settings.loopable)
     return { state: currentState, looping: !looping };
 
@@ -78,11 +84,11 @@ function getCrossCuttingTransition(
 }
 
 function getNextStateDetails(
-  currentState: RecorderState,
-  event: RecorderEvent,
-  ctx: RecorderContext,
+  currentState: PadState,
+  event: PadEvent,
+  ctx: PadContext,
   looping: boolean
-): RecorderStateDetails {
+): PadStateDetails {
   if (ctx.settingsPressed && ["press", "double-press", "held"].includes(event))
     return { state: currentState, looping };
 
@@ -97,8 +103,8 @@ function getNextStateDetails(
   return { state: nextState, looping: nextLooping };
 }
 
-export class RecorderStateMachine {
-  public state: RecorderState;
+export class PadStateMachine {
+  public state: PadState;
   public looping: boolean;
 
   constructor() {
@@ -106,7 +112,7 @@ export class RecorderStateMachine {
     this.looping = false;
   }
 
-  public transition(event: RecorderEvent, ctx: RecorderContext) {
+  public transition(event: PadEvent, ctx: PadContext) {
     const next = getNextStateDetails(this.state, event, ctx, this.looping);
     this.state = next.state;
     this.looping = next.looping;

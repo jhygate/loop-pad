@@ -2,27 +2,26 @@
 // needs acces to FSM - looping/display
 // needs access to audfio object for animations.
 
-import { RecorderContext } from "./recorder";
-import { RecorderState } from "./recorder-state-machine";
+import { PadState } from "./pad-state-machine";
 
 function getFilledTemplate(
-  recorder_number: number,
-  recorder_looping: boolean,
-  recorder_state: RecorderState,
-  recorder_progress: number
+  pad_number: number,
+  pad_looping: boolean,
+  pad_state: PadState,
+  pad_progress: number
 ) {
   return `
-    <div class="recorder-container">
-      <div class="recorder-header">
-        <div class="recorder-number">${recorder_number}</div>
-        <div class="recorder-looping">${recorder_looping}</div>
+    <div class="pad-container">
+      <div class="pad-header">
+        <div class="pad-number">${pad_number}</div>
+        <div class="pad-looping">${pad_looping}</div>
       </div>
-      <div class="recorder-icon">${recorder_state}</div>
-      <div class="recorder-progress">${recorder_progress}</div>
+      <div class="pad-icon">${pad_state}</div>
+      <div class="pad-progress">${pad_progress}</div>
     </div>
 
     <style>
-      .recorder-container {
+      .pad-container {
         width: 200px;
         height: 200px;
         display: flex;
@@ -31,7 +30,7 @@ function getFilledTemplate(
         justify-content: space-between;
       }
 
-      .recorder-header {
+      .pad-header {
         height: 100px;
         width: 100%;
         display: flex;
@@ -39,12 +38,12 @@ function getFilledTemplate(
         justify-content: space-between;
       }
 
-      .recorder-icon {
+      .pad-icon {
         align-self: center;
         border-style: solid;
       }
 
-      .recorder-progress {
+      .pad-progress {
         display: flex;
         flex-direction: column;
         justify-content: flex-end; /* pushes content to bottom */
@@ -54,14 +53,14 @@ function getFilledTemplate(
   `;
 }
 
-export class RecorderViewHandler {
+export class PadViewHandler {
   private htmlElement: HTMLElement;
 
   constructor(htmlElement: HTMLElement) {
     this.htmlElement = htmlElement;
   }
 
-  public render(state: RecorderState) {
+  public render(state: PadState) {
     this.htmlElement.innerHTML = getFilledTemplate(1, true, state, 0);
   }
 }

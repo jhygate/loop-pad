@@ -1,18 +1,20 @@
 import {
-  RecorderStateMachine,
-  RecorderState,
-  RecorderEvent,
-} from "./recorder-state-machine.js";
-import { RecorderSettings } from "./recorder-settings.js";
-import { RecorderViewHandler } from "./recorder-view.js";
+  PadStateMachine,
+  PadState,
+  PadEvent,
+  ControllerPadEvent
+} from "./pad-state-machine.js";
+import { PadSettings } from "./pad-settings.js";
+import { PadViewHandler } from "./pad-view.js";
 import {
   DOUBLE_CLICK_TIME,
   HOLD_TO_DELETE_TIME,
-} from "./recorder-constants.js";
+} from "./pad-constants.js";
+import { PadAudioHandler } from "./pad-audio.js";
 
-export type RecorderContext = {
+export type PadContext = {
   settingsPressed: boolean;
-  settings: RecorderSettings;
+  settings: PadSettings;
 };
 
 //ToDo:
@@ -20,11 +22,12 @@ export type RecorderContext = {
 // - Implement StateActioner (SyncActioner, AudioActioner)
 // - Implement Settings
 
-export class Recorder {
-  private stateMachine: RecorderStateMachine;
-  private viewHandler: RecorderViewHandler;
+export class Pad {
+  private stateMachine: PadStateMachine;
+  private viewHandler: PadViewHandler;
+  private audoHandler: PadAudioHandler;
 
-  private settings: RecorderSettings;
+  private settings: PadSettings;
 
   private htmlElement: HTMLElement;
 
@@ -35,24 +38,27 @@ export class Recorder {
 
   private settingsPressed: boolean;
 
-  constructor(buttonId: string) {
-    this.stateMachine = new RecorderStateMachine();
+  constructor(buttonId: string, stream: MediaStream, audioContext: AudioContext) {
+    this.stateMachine = new PadStateMachine();
 
     this.htmlElement = document.getElementById(buttonId);
-    this.viewHandler = new RecorderViewHandler(this.htmlElement);
+    this.viewHandler = new PadViewHandler(this.htmlElement);
+
+    this.audoHandler = new PadAudioHandler(stream, audioContext);
 
     this.holdTimerId = -1;
     this.clickCount = 0;
     this.held = false;
 
     this.settingsPressed = false;
-    this.settings = new RecorderSettings();
+    this.settings = new PadSettings();
 
     this.bindUI();
+    this.setupListeners();
     this.render();
   }
 
-  public get state(): RecorderState {
+  public get state(): PadState {
     return this.stateMachine.state;
   }
 
@@ -61,12 +67,11 @@ export class Recorder {
   }
 
   private bindUI() {
-    this.htmlElement.addEventListener("pointerdown", (e) => {
+    this.htmlElement.addEventListener("pointerdown", () => {
       this.clickCount += 1;
 
       setTimeout(() => {
         this.clickCount = 0;
-        console.log("rest timer");
       }, DOUBLE_CLICK_TIME);
 
       this.holdTimerId = setTimeout(() => {
@@ -75,12 +80,11 @@ export class Recorder {
       }, HOLD_TO_DELETE_TIME);
     });
 
-    this.htmlElement.addEventListener("pointerup", (e) => {
+    this.htmlElement.addEventListener("pointerup", () => {
       if (this.held) {
         this.held = false;
         return;
       }
-      console.log(this.clickCount);
 
       clearTimeout(this.holdTimerId);
       if (this.clickCount == 1) {
@@ -91,13 +95,20 @@ export class Recorder {
     });
   }
 
-  private transitionState(event: RecorderEvent) {
-    console.log(event);
-    const recorderContext: RecorderContext = {
+  private setupListeners() {
+    this.htmlElement.addEventListener('pad-update', (e: Event) => {
+      const customEvent = e as CustomEvent<ControllerPadEvent>;
+      this.transitionState(customEvent.detail);
+    });
+  }
+
+  private transitionState(event: PadEvent) {
+    const padContext: PadContext = {
       settingsPressed: this.settingsPressed,
       settings: this.settings,
     };
-    this.stateMachine.transition(event, recorderContext);
+    this.stateMachine.transition(event, padContext);
+    this.audoHandler.handleStateChange(this.state);
     this.render();
   }
 

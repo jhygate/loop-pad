@@ -1,4 +1,4 @@
-export class RecorderSettings {
+export class PadSettings {
   public recordSyncStart: boolean;
   public recordSyncEnd: boolean;
   public playingPressBehavior: "stop" | "restart";
