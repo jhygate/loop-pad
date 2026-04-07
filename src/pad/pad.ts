@@ -4,7 +4,7 @@ import {
   PadEvent,
   ControllerPadEvent
 } from "./pad-state-machine.js";
-import { PadSettings } from "./pad-settings.js";
+import type { PadSettings } from "./pad-settings.js";
 import { PadViewHandler } from "./pad-view.js";
 import {
   DOUBLE_CLICK_TIME,
@@ -53,7 +53,14 @@ export class Pad {
     this.clickCount = 0;
     this.held = false;
 
-    this.settings = new PadSettings();
+    this.settings = {
+      recordSyncStart: false,
+      recordSyncEnd: false,
+      playSyncStart: false,
+      playingPressBehavior: "stop",
+      loopable: false
+
+    }
     this.globalState = globalState;
 
     this.bindUI();
@@ -90,6 +97,18 @@ export class Pad {
       }
 
       clearTimeout(this.holdTimerId);
+
+      if (this.globalState.settingsPressed) {
+        document.dispatchEvent(new CustomEvent("open-pad-settings", {
+          detail: {
+            settings: this.settings,
+            onSave: (updated: PadSettings) => {
+              this.settings = updated;
+            }
+          }
+        }));
+        return;  // don't fall through to normal press logic
+      }
       if (this.clickCount == 1) {
         this.transitionState("press");
       } else if (this.clickCount == 2) {
