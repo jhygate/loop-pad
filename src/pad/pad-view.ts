@@ -1,67 +1,78 @@
-//Needs access to settings (displaying settings info perhaps?)
-// needs acces to FSM - looping/display
-// needs access to audfio object for animations.
+import { PadState } from "./pad-state-machine.js";
+import {
+  emptyTemplate,
+  recordingTemplate,
+  recordedTemplate,
+  playingTemplate,
+  settingsTemplate,
+  waitingTemplate,
+  HOLD_TO_DELETE_TIME,
+} from "./pad-constants.js";
 
-import { PadState } from "./pad-state-machine";
-
-function getFilledTemplate(
-  pad_number: number,
-  pad_looping: boolean,
-  pad_state: PadState,
-  pad_progress: number,
-  setting_pressed: boolean
-) {
-  return `
-    <div class="pad-container">
-      <div class="pad-header">
-        <div class="pad-number">${pad_number}</div>
-        <div class="pad-looping">${pad_looping}</div>
-      </div>
-      <div class="pad-icon">${setting_pressed ? "settings" : pad_state}</div>
-      <div class="pad-progress">${pad_progress}</div>
-    </div>
-
-    <style>
-      .pad-container {
-        width: 200px;
-        height: 200px;
-        display: flex;
-        flex-direction: column;
-        border-style: solid;
-        justify-content: space-between;
-      }
-
-      .pad-header {
-        height: 100px;
-        width: 100%;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-      }
-
-      .pad-icon {
-        align-self: center;
-        border-style: solid;
-      }
-
-      .pad-progress {
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end; /* pushes content to bottom */
-        height: 100px;
-      }
-    </style>
-  `;
-}
+const ALL_STATE_CLASSES = ["recording", "has-audio", "playing", "waiting"] as const;
 
 export class PadViewHandler {
-  private htmlElement: HTMLElement;
-
-  constructor(htmlElement: HTMLElement) {
-    this.htmlElement = htmlElement;
+  constructor(private htmlElement: HTMLElement) {
+    // Set the CSS var for the hold-to-delete animation once at construction
+    this.htmlElement.style.setProperty("--delete-time", `${HOLD_TO_DELETE_TIME}ms`);
   }
 
-  public render(state: PadState, settings_pressed) {
-    this.htmlElement.innerHTML = getFilledTemplate(1, true, state, 0, settings_pressed);
+  public render(
+    state: PadState,
+    looping: boolean,
+    settingsPressed: boolean,
+    padNumber: number
+  ): void {
+    // Clear all state classes then apply only the relevant ones for this state
+    ALL_STATE_CLASSES.forEach(cls => this.htmlElement.classList.remove(cls));
+
+    if (settingsPressed) {
+      this.htmlElement.innerHTML = settingsTemplate(padNumber);
+      return;
+    }
+
+    switch (state) {
+      case "empty":
+        this.htmlElement.innerHTML = emptyTemplate(padNumber);
+        break;
+
+      case "recording":
+        this.htmlElement.innerHTML = recordingTemplate(padNumber);
+        this.htmlElement.classList.add("recording");
+        break;
+
+      case "waiting-to-record":
+        this.htmlElement.innerHTML = waitingTemplate(padNumber, "Waiting...");
+        this.htmlElement.classList.add("waiting");
+        break;
+
+      case "recorded":
+        this.htmlElement.innerHTML = recordedTemplate(padNumber, looping);
+        this.htmlElement.classList.add("has-audio");
+        break;
+
+      case "waiting-to-end-recording":
+        this.htmlElement.innerHTML = waitingTemplate(padNumber, "Waiting...");
+        this.htmlElement.classList.add("waiting", "has-audio");
+        break;
+
+      case "playing":
+        this.htmlElement.innerHTML = playingTemplate(padNumber, looping);
+        this.htmlElement.classList.add("playing", "has-audio");
+        break;
+
+      case "waiting-to-play":
+        this.htmlElement.innerHTML = waitingTemplate(padNumber, "Waiting...");
+        this.htmlElement.classList.add("waiting", "has-audio");
+        break;
+    }
+  }
+
+  public startHoldAnimation(): void {
+    this.htmlElement.classList.add("holding");
+  }
+
+  public stopHoldAnimation(): void {
+    this.htmlElement.classList.remove("holding");
   }
 }

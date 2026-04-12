@@ -33,25 +33,33 @@ type Transition = (ctx: PadContext, looping: boolean) => PadState;
 
 const table: Record<PadState, Partial<Record<PadEvent, Transition>>> = {
   "empty": {
-    "press": (ctx) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording",
+    // Only enter waiting state if loopSync master toggle AND sub-setting are both on
+    "press": (ctx) => ctx.settings.loopSync && ctx.settings.recordSyncStart
+      ? "waiting-to-record"
+      : "recording",
   },
   "waiting-to-record": {
     "ready-to-record": () => "recording",
   },
   "recording": {
-    "press": (ctx) => ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "recorded",
+    "press": (ctx) => ctx.settings.loopSync && ctx.settings.recordSyncEnd
+      ? "waiting-to-end-recording"
+      : "recorded",
   },
   "waiting-to-end-recording": {
     "ready-to-end-recording": () => "recorded",
   },
   "recorded": {
-    "press": (ctx) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing",
+    "press": (ctx) => ctx.settings.loopSync && ctx.settings.playSyncStart
+      ? "waiting-to-play"
+      : "playing",
   },
   "waiting-to-play": {
-    "ready-to-play": (_) => "playing"
+    "ready-to-play": () => "playing",
   },
   "playing": {
-    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "recorded",
+    // stop → go to recorded; restart → stay on playing (audio handler stops+restarts)
+    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "playing",
     "loop-end": (_, looping) => looping ? "playing" : "recorded",
   },
 };
@@ -68,7 +76,7 @@ function getCrossCuttingTransition(
     return { state: currentState, looping: !looping };
 
   if (event === "held" && HELD_STATES.includes(currentState))
-    return { state: "empty", looping };
+    return { state: "empty", looping: false };
 
   return null;
 }
@@ -99,7 +107,7 @@ export class PadStateMachine {
 
   constructor() {
     this.state = "empty";
-    this.looping = true;
+    this.looping = false; // looping only becomes true after explicit double-tap
   }
 
   public transition(event: PadEvent, ctx: PadContext) {
