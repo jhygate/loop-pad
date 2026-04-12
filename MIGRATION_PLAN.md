@@ -220,16 +220,33 @@ document.addEventListener("keyup", (e) => {
 ```
 
 **Sync timer logic** — new private method called after every `transitionState()`:
-```ts
-private handleWaitingState(): void {
-  const waitingMap: Record<string, ControllerPadEvent> = {
-    "waiting-to-record": "ready-to-record",
-    "waiting-to-end-recording": "ready-to-end-recording",
-    "waiting-to-play": "ready-to-play",
-  };
 
-  const readyEvent = waitingMap[this.state];
-  if (!readyEvent) return;
+Each waiting state maps to the specific `loopSync` sub-setting that enabled it.
+Before waiting, the method checks whether that setting is actually on. This is a
+belt-and-suspenders guard — the state machine already gates entry into waiting
+states via these settings, but `handleWaitingState` re-checks them so that a
+settings change mid-flight (or any future edge case) always fires immediately
+rather than hanging forever.
+
+```ts
+// Maps each waiting state → (the ready event to fire, the setting that enabled it)
+const waitingMap: Record<string, { readyEvent: ControllerPadEvent; settingEnabled: boolean }> = {
+  "waiting-to-record":        { readyEvent: "ready-to-record",         settingEnabled: this.settings.loopSync && this.settings.recordSyncStart },
+  "waiting-to-end-recording": { readyEvent: "ready-to-end-recording",  settingEnabled: this.settings.loopSync && this.settings.recordSyncEnd   },
+  "waiting-to-play":          { readyEvent: "ready-to-play",           settingEnabled: this.settings.loopSync && this.settings.playSyncStart    },
+};
+
+private handleWaitingState(): void {
+  const entry = waitingMap[this.state];
+  if (!entry) return;
+
+  const { readyEvent, settingEnabled } = entry;
+
+  // If the relevant sync setting is off, fire immediately — don't wait
+  if (!settingEnabled) {
+    this.transitionState(readyEvent);
+    return;
+  }
 
   // Find the soonest loop end among all OTHER looping pads
   const times = this.allPads
@@ -238,7 +255,7 @@ private handleWaitingState(): void {
     .filter((t): t is number => t !== null);
 
   if (times.length === 0) {
-    // No looping pads — fire immediately
+    // No looping pads to sync to — fire immediately
     this.transitionState(readyEvent);
     return;
   }
