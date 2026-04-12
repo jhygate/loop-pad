@@ -1,5 +1,7 @@
 import { Pad } from "./pad/pad.js";
 import { SettingsModal } from "./settings/settings-modal.js";
+import { DebugPanel } from "./debug/debug-panel.js";
+import { logger } from "./debug/logger.js";
 
 export type GlobalState = {
   settingsPressed: boolean;
@@ -23,11 +25,14 @@ class App {
   private globalState: GlobalState = { settingsPressed: false };
 
   constructor() {
+    // Debug panel — mounts itself, enables the logger, backtick to toggle
+    new DebugPanel();
+
     const audioCtx = new AudioContext();
     const dialogEl = document.getElementById("pad-settings-dialog") as HTMLDialogElement;
     this.settingsModal = new SettingsModal(dialogEl);
 
-    // When a pad requests the settings modal, open it then reset settingsPressed
+    // When a pad opens the settings modal, flip settingsPressed back off afterwards
     document.addEventListener("open-pad-settings", (e: Event) => {
       const { settings, onSave } = (e as CustomEvent).detail;
       this.settingsModal.open(settings, onSave);
@@ -35,18 +40,19 @@ class App {
       document.dispatchEvent(new CustomEvent("global-state-update"));
     });
 
-    // Settings button toggles the "click a pad to configure it" mode
+    // Settings button toggles "click a pad to configure it" mode
     document.getElementById("settings-button").addEventListener("click", () => {
       this.globalState.settingsPressed = !this.globalState.settingsPressed;
+      logger.log("settings", null, `settings mode: ${this.globalState.settingsPressed ? "on" : "off"}`);
       document.dispatchEvent(new CustomEvent("global-state-update"));
     });
 
-    // Export / Import / Clear
     document.getElementById("export-config").addEventListener("click", () => this.exportProject());
     document.getElementById("import-config").addEventListener("click", () => this.importProject());
     document.getElementById("clear-session").addEventListener("click", () => this.clearAll());
 
-    // Request microphone once — stream is shared across all pads
+    // Microphone requested once — stream shared across all pads
+    logger.log("state", null, "requesting microphone");
     navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
@@ -55,15 +61,21 @@ class App {
       },
     })
       .then((stream) => {
+        logger.log("state", null, `microphone acquired — creating ${PAD_CONFIGS.length} pads`);
         PAD_CONFIGS.forEach(({ id, key }, i) => {
           this.pads.push(new Pad(id, stream, audioCtx, this.globalState, this.pads, key, i));
         });
+        logger.log("state", null, "all pads created");
       })
-      .catch((err) => console.error("Microphone access denied:", err));
+      .catch((err) => {
+        logger.log("state", null, `microphone denied: ${err.message}`);
+        console.error("Microphone access denied:", err);
+      });
   }
 
   private async exportProject() {
     try {
+      logger.log("storage", null, "exporting project");
       const records = await Promise.all(this.pads.map(p => p.exportData()));
       const payload = {
         version: 2,
@@ -80,7 +92,9 @@ class App {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      logger.log("storage", null, "project exported");
     } catch (err) {
+      logger.log("storage", null, `export failed: ${err}`);
       console.error("Export failed:", err);
       alert("Error exporting project.");
     }
@@ -95,6 +109,7 @@ class App {
       const file = input.files?.[0];
       if (!file) return;
 
+      logger.log("storage", null, `importing project file: ${file.name}`);
       try {
         const text = await file.text();
         const payload = JSON.parse(text);
@@ -109,7 +124,9 @@ class App {
             await this.pads[i].importData(payload.pads[i]);
           }
         }
+        logger.log("storage", null, "project imported");
       } catch (err) {
+        logger.log("storage", null, `import failed: ${err}`);
         console.error("Import failed:", err);
         alert("Error loading project file.");
       }
@@ -120,6 +137,7 @@ class App {
 
   private async clearAll() {
     if (!confirm("Clear all pads? This cannot be undone.")) return;
+    logger.log("storage", null, "clearing all pads");
     await Promise.all(this.pads.map(p => p.clearStorage()));
     location.reload();
   }

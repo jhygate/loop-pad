@@ -9,6 +9,7 @@ import { PadViewHandler } from "./pad-view.js";
 import { DOUBLE_CLICK_TIME, HOLD_TO_DELETE_TIME } from "./pad-constants.js";
 import { PadAudioHandler } from "./pad-audio.js";
 import { PadStorage } from "./pad-storage.js";
+import { logger, PadLog } from "../debug/logger.js";
 import { GlobalState } from "../script.js";
 
 export type PadContext = {
@@ -35,6 +36,8 @@ export class Pad {
   private key: string;
   private index: number;
 
+  private log: PadLog;
+
   constructor(
     buttonId: string,
     stream: MediaStream,
@@ -44,12 +47,18 @@ export class Pad {
     key: string,
     index: number
   ) {
+    this.index = index;
+    this.key = key;
+    this.log = logger.scoped(index);
+
     this.stateMachine = new PadStateMachine();
     this.settings = { ...DEFAULT_PAD_SETTINGS };
 
     this.htmlElement = document.getElementById(buttonId);
     this.viewHandler = new PadViewHandler(this.htmlElement);
-    this.audioHandler = new PadAudioHandler(stream, audioContext, this.htmlElement, this.settings);
+    this.audioHandler = new PadAudioHandler(
+      stream, audioContext, this.htmlElement, this.settings, this.log
+    );
     this.storage = new PadStorage(index);
 
     this.holdTimerId = -1;
@@ -59,12 +68,12 @@ export class Pad {
 
     this.globalState = globalState;
     this.allPads = allPads;
-    this.key = key;
-    this.index = index;
+
+    this.log.state(`pad created (key: "${key}")`);
 
     this.bindUI();
     this.setupListeners();
-    this.loadFromStorage(audioContext);
+    this.loadFromStorage();
   }
 
   // ── Public getters ──────────────────────────────────────────────────────────
@@ -77,8 +86,8 @@ export class Pad {
     return this.stateMachine.looping;
   }
 
-  // Returns seconds until the current loop iteration ends.
-  // Only non-null when this pad is playing AND looping — used by other pads for sync.
+  // Seconds until current loop ends — only non-null when playing AND looping.
+  // Other pads query this to calculate sync timer delays.
   public get timeUntilLoopEnd(): number | null {
     if (this.state !== "playing" || !this.looping) return null;
     return this.audioHandler.timeUntilEnd;
@@ -87,7 +96,6 @@ export class Pad {
   // ── UI binding ──────────────────────────────────────────────────────────────
 
   private bindUI() {
-    // Pointer events
     this.htmlElement.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       this.onPointerDown();
@@ -99,10 +107,10 @@ export class Pad {
     });
 
     this.htmlElement.addEventListener("pointercancel", () => {
+      this.log.input("pointercancel — cancelling hold");
       this.cancelHold();
     });
 
-    // Keyboard events — bindings live in the Pad
     document.addEventListener("keydown", (e) => {
       if (e.key.toLowerCase() === this.key && !e.repeat) this.onPointerDown();
     });
@@ -114,12 +122,15 @@ export class Pad {
 
   private onPointerDown() {
     this.clickCount += 1;
-    // Reset click count after double-click window
+    this.log.input(`pointerdown (clicks so far: ${this.clickCount})`);
+
+    // Reset click count after the double-click window expires
     setTimeout(() => { this.clickCount = 0; }, DOUBLE_CLICK_TIME);
 
     this.viewHandler.startHoldAnimation();
 
     this.holdTimerId = setTimeout(() => {
+      this.log.input(`hold threshold reached (${HOLD_TO_DELETE_TIME}ms) → held`);
       this.held = true;
       this.viewHandler.stopHoldAnimation();
       this.transitionState("held");
@@ -129,19 +140,21 @@ export class Pad {
   private onPointerUp() {
     if (this.held) {
       this.held = false;
+      this.log.input("pointerup after hold — ignoring");
       return;
     }
 
     this.cancelHold();
 
     if (this.globalState.settingsPressed) {
+      this.log.input("pointerup → opening pad settings modal");
       document.dispatchEvent(new CustomEvent("open-pad-settings", {
         detail: {
           settings: this.settings,
           onSave: (updated: PadSettings) => {
+            this.log.settings(`settings saved — loopSync:${updated.loopSync} loopable:${updated.loopable} trim:${updated.trimAudio}`);
             this.settings = updated;
             this.audioHandler.updateSettings(updated);
-            // Persist new settings immediately (no audio change, just settings)
             this.storage.save(updated, this.audioHandler.audioBuffer);
           },
         },
@@ -150,8 +163,10 @@ export class Pad {
     }
 
     if (this.clickCount === 1) {
+      this.log.input("pointerup → press");
       this.transitionState("press");
     } else if (this.clickCount >= 2) {
+      this.log.input(`pointerup → double-press (${this.clickCount} clicks)`);
       this.transitionState("double-press");
     }
   }
@@ -164,15 +179,17 @@ export class Pad {
   // ── Internal event listeners ────────────────────────────────────────────────
 
   private setupListeners() {
-    // Audio handler fires this when a recording has finished processing
+    // Audio handler fires this when a recording finishes async processing
     this.htmlElement.addEventListener("pad-recording-ready", () => {
+      this.log.audio("pad-recording-ready received — saving");
       this.storage.save(this.settings, this.audioHandler.audioBuffer);
       this.render();
     });
 
-    // Audio handler fires this when a loop playback iteration ends
+    // Audio handler fires this when a playback loop iteration ends
     this.htmlElement.addEventListener("pad-update", (e: Event) => {
       const event = (e as CustomEvent<ControllerPadEvent>).detail;
+      this.log.audio(`pad-update received: "${event}"`);
       this.transitionState(event);
     });
 
@@ -192,25 +209,31 @@ export class Pad {
     };
 
     const prevState = this.state;
+    const prevLooping = this.looping;
     this.stateMachine.transition(event, ctx);
     const nextState = this.state;
+    const nextLooping = this.looping;
+
+    const loopChange = prevLooping !== nextLooping
+      ? ` [looping: ${prevLooping} → ${nextLooping}]`
+      : nextLooping ? " [looping]" : "";
+
+    this.log.state(`"${event}": ${prevState} → ${nextState}${loopChange}`);
 
     this.audioHandler.handleStateChange(nextState);
 
-    // After a delete (→ empty) or recording stop (→ recorded), persist
     if (nextState === "empty") {
       this.storage.save(this.settings, null);
     }
-    // Note: recorded state persistence is handled by pad-recording-ready event
-    // because the audio buffer isn't ready synchronously when stopRecording() is called
+    // "recorded" persistence is deferred — handled by pad-recording-ready event
+    // because the audio buffer isn't ready until the async onstop callback fires
 
     this.handleWaitingState();
     this.render();
   }
 
-  // Checks if we've entered a waiting state and, if the relevant sync setting is
-  // on and looping pads exist, sets a timer to fire the ready event at the soonest
-  // loop boundary. Falls through to immediate fire if sync is off or no pads loop.
+  // If we just entered a waiting-* state, decide whether to wait for a sync
+  // loop boundary or fire the ready event immediately.
   private handleWaitingState() {
     const waitingMap: Record<string, { readyEvent: ControllerPadEvent; settingEnabled: boolean }> = {
       "waiting-to-record": {
@@ -233,27 +256,30 @@ export class Pad {
     const { readyEvent, settingEnabled } = entry;
 
     if (!settingEnabled) {
+      this.log.sync(`${this.state}: sync setting off — firing ${readyEvent} immediately`);
       this.transitionState(readyEvent);
       return;
     }
 
-    // Find the soonest loop end among all OTHER looping pads
+    // Poll all other pads for their loop positions
     const times = this.allPads
       .filter(p => p !== this)
       .map(p => p.timeUntilLoopEnd)
       .filter((t): t is number => t !== null);
 
     if (times.length === 0) {
-      // No looping pads to sync to — fire immediately
+      this.log.sync(`${this.state}: no looping pads — firing ${readyEvent} immediately`);
       this.transitionState(readyEvent);
       return;
     }
 
     const soonestMs = Math.min(...times) * 1000;
-    this.syncTimerId = setTimeout(
-      () => this.transitionState(readyEvent),
-      soonestMs
-    ) as unknown as number;
+    this.log.sync(`${this.state}: waiting ${soonestMs.toFixed(0)}ms for nearest loop end → ${readyEvent}`);
+
+    this.syncTimerId = setTimeout(() => {
+      this.log.sync(`sync timer fired → ${readyEvent}`);
+      this.transitionState(readyEvent);
+    }, soonestMs) as unknown as number;
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -269,8 +295,8 @@ export class Pad {
 
   // ── Storage ─────────────────────────────────────────────────────────────────
 
-  private async loadFromStorage(audioContext: AudioContext) {
-    const saved = await this.storage.load(audioContext);
+  private async loadFromStorage() {
+    const saved = await this.storage.load(this.audioHandler.ctx);
     if (!saved) {
       this.render();
       return;
@@ -281,25 +307,23 @@ export class Pad {
 
     if (saved.audioBuffer) {
       this.audioHandler.audioBuffer = saved.audioBuffer;
-      // Manually put the state machine into "recorded" to match the loaded audio
+      // Manually set state machine to "recorded" to match the restored audio
       this.stateMachine.state = "recorded";
+      this.log.storage("restored to recorded state with audio");
     }
 
     this.render();
   }
 
-  // Called by script.ts to get serialisable data for JSON export
   public async exportData() {
     return this.storage.exportData();
   }
 
-  // Called by script.ts when importing a JSON project file
   public async importData(data: any) {
     await this.storage.importData(data);
-    await this.loadFromStorage(this.audioHandler["audioContext"]);
+    await this.loadFromStorage();
   }
 
-  // Called by script.ts for "Clear All Pads"
   public async clearStorage() {
     await this.storage.clear();
   }

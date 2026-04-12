@@ -1,4 +1,5 @@
 import { PadSettings, DEFAULT_PAD_SETTINGS } from "./pad-settings.js";
+import { logger } from "../debug/logger.js";
 
 const DB_NAME = "LoopPadDB";
 const DB_VERSION = 1;
@@ -79,8 +80,10 @@ export class PadStorage {
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
       });
+      logger.log("storage", this.index, `saved — hasAudio: ${audioBuffer !== null}`);
     } catch (err) {
       console.error(`PadStorage[${this.index}]: save failed`, err);
+      logger.log("storage", this.index, `save failed: ${err}`);
     }
   }
 
@@ -98,7 +101,10 @@ export class PadStorage {
         req.onerror = () => reject(req.error);
       });
 
-      if (!data) return null;
+      if (!data) {
+        logger.log("storage", this.index, "no saved data");
+        return null;
+      }
 
       const audioBuffer = data.audioBuffer
         ? storableToAudioBuffer(data.audioBuffer, audioContext)
@@ -107,9 +113,11 @@ export class PadStorage {
       // Merge with defaults so any new settings added since last save get sane values
       const settings: PadSettings = { ...DEFAULT_PAD_SETTINGS, ...data.settings };
 
+      logger.log("storage", this.index, `loaded — hasAudio: ${audioBuffer !== null}`);
       return { settings, audioBuffer };
     } catch (err) {
       console.error(`PadStorage[${this.index}]: load failed`, err);
+      logger.log("storage", this.index, `load failed: ${err}`);
       return null;
     }
   }
@@ -124,6 +132,7 @@ export class PadStorage {
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
       });
+      logger.log("storage", this.index, "cleared");
     } catch (err) {
       console.error(`PadStorage[${this.index}]: clear failed`, err);
     }
