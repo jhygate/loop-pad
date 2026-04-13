@@ -1,7 +1,6 @@
 import type { PadSettings } from "../pad/pad-settings.js";
 
 const checked = (val: boolean) => val ? "checked" : "";
-const selected = (a: string, b: string) => a === b ? "selected" : "";
 
 function getFilledTemplate(s: PadSettings): string {
   return `
@@ -79,9 +78,6 @@ function getFilledTemplate(s: PadSettings): string {
           </div>
         </div>
 
-        <div class="settings-footer">
-          <button class="submit-btn" value="confirm">Save Settings</button>
-        </div>
       </form>
     </div>
   `;
@@ -106,32 +102,25 @@ export class SettingsModal {
     this.dialog.innerHTML = getFilledTemplate(settings);
     this.dialog.showModal();
 
-    this.dialog.addEventListener("close", () => {
-      if (this.dialog.returnValue !== "confirm") return;
+    const form = this.dialog.querySelector("form") as HTMLFormElement;
 
-      const form = this.dialog.querySelector("form") as HTMLFormElement;
+    const readForm = (): PadSettings => {
       const data = new FormData(form);
-
-      const updated: PadSettings = {
-        // Playback
+      return {
         loopable: data.has("loopable"),
         playingPressBehavior: (data.get("playingPressBehavior") as "stop" | "restart") ?? "stop",
-
-        // Trim
         trimAudio: data.has("trimAudio"),
         trimThreshold: parseFloat(data.get("trimThreshold") as string) || 0.05,
         trimAudioLeft: data.has("trimAudioLeft"),
         trimAudioRight: data.has("trimAudioRight"),
-
-        // Sync
         loopSync: data.has("loopSync"),
         syncThreshold: parseFloat(data.get("syncThreshold") as string) || 20000,
         recordSyncStart: data.has("recordSyncStart"),
         recordSyncEnd: data.has("recordSyncEnd"),
         playSyncStart: data.has("playSyncStart"),
       };
+    };
 
-      onSave(updated);
-    }, { once: true });
+    form.addEventListener("change", () => onSave(readForm()));
   }
 }

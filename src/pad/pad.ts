@@ -155,7 +155,15 @@ export class Pad {
             this.log.settings(`settings saved — loopSync:${updated.loopSync} loopable:${updated.loopable} trim:${updated.trimAudio}`);
             this.settings = updated;
             this.audioHandler.updateSettings(updated);
+
+            // If loopable was just disabled and the pad is currently looping, clear it
+            if (!updated.loopable && this.stateMachine.looping) {
+              this.log.settings("loopable disabled — clearing looping flag");
+              this.stateMachine.looping = false;
+            }
+
             this.storage.save(updated, this.audioHandler.audioBuffer);
+            this.render();
           },
         },
       }));
@@ -166,8 +174,13 @@ export class Pad {
       this.log.input("pointerup → press");
       this.transitionState("press");
     } else if (this.clickCount >= 2) {
-      this.log.input(`pointerup → double-press (${this.clickCount} clicks)`);
-      this.transitionState("double-press");
+      if (this.settings.loopable) {
+        this.log.input(`pointerup → double-press (${this.clickCount} clicks)`);
+        this.transitionState("double-press");
+      } else {
+        this.log.input(`pointerup → press (double-press ignored, loopable off)`);
+        this.transitionState("press");
+      }
     }
   }
 
