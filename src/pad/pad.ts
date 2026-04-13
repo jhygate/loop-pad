@@ -183,6 +183,15 @@ export class Pad {
     this.htmlElement.addEventListener("pad-recording-ready", () => {
       this.log.audio("pad-recording-ready received — saving");
       this.storage.save(this.settings, this.audioHandler.audioBuffer);
+
+      // Race condition: user may have pressed play before the buffer finished decoding.
+      // If the state machine is already in "playing", kick off audio now.
+      if (this.state === "playing") {
+        this.log.audio("buffer arrived while in playing state — starting playback now");
+        this.setPlayDuration();
+        this.audioHandler.startPlaying();
+      }
+
       this.render();
     });
 
@@ -228,8 +237,24 @@ export class Pad {
     // "recorded" persistence is deferred — handled by pad-recording-ready event
     // because the audio buffer isn't ready until the async onstop callback fires
 
+    // Set --play-duration BEFORE render() adds the .playing class so the CSS
+    // transition uses the correct duration from the first frame.
+    if (nextState === "playing") {
+      this.setPlayDuration();
+    }
+
     this.handleWaitingState();
     this.render();
+  }
+
+  // Writes the audio buffer duration onto the element as a CSS custom property.
+  // Must be called synchronously before render() so the ::before transition picks it up.
+  private setPlayDuration() {
+    const durationMs = this.audioHandler.audioBuffer
+      ? this.audioHandler.audioBuffer.duration * 1000
+      : 1000;
+    this.log.audio(`--play-duration set to ${durationMs.toFixed(0)}ms`);
+    this.htmlElement.style.setProperty("--play-duration", `${durationMs}ms`);
   }
 
   // If we just entered a waiting-* state, decide whether to wait for a sync

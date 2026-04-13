@@ -58,6 +58,10 @@ export class PadViewHandler {
 
       case "playing":
         this.htmlElement.innerHTML = playingTemplate(padNumber, looping);
+        // Force a synchronous reflow between the class removal (top of render) and
+        // re-adding .playing. Without this, the browser batches it as a no-op and
+        // the ::before progress-bar transition never restarts on replay.
+        void (this.htmlElement as HTMLElement).offsetWidth;
         this.htmlElement.classList.add("playing", "has-audio");
         break;
 

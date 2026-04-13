@@ -40,22 +40,26 @@ export class PadAudioHandler {
 
     this.mediaRecorder.onstop = async () => {
       this.log.audio("processing recording chunks");
-      const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
-      const arrayBuffer = await blob.arrayBuffer();
-      let buffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      this.chunks = [];
+      try {
+        const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
+        this.chunks = [];
+        const arrayBuffer = await blob.arrayBuffer();
+        let buffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
-      if (this.settings.trimAudio) {
-        const before = buffer.duration;
-        buffer = this.trimBuffer(buffer);
-        this.log.audio(`trimmed: ${before.toFixed(3)}s → ${buffer.duration.toFixed(3)}s`);
+        if (this.settings.trimAudio) {
+          const before = buffer.duration;
+          buffer = this.trimBuffer(buffer);
+          this.log.audio(`trimmed: ${before.toFixed(3)}s → ${buffer.duration.toFixed(3)}s`);
+        }
+
+        this.audioBuffer = buffer;
+        this.log.audio(`recording ready: ${buffer.duration.toFixed(3)}s`);
+
+        // Signal to Pad that the async processing is done and it can save/re-render
+        this.element.dispatchEvent(new CustomEvent("pad-recording-ready"));
+      } catch (err) {
+        this.log.audio(`decodeAudioData failed: ${err}`);
       }
-
-      this.audioBuffer = buffer;
-      this.log.audio(`recording ready: ${buffer.duration.toFixed(3)}s`);
-
-      // Signal to Pad that the async processing is done and it can save/re-render
-      this.element.dispatchEvent(new CustomEvent("pad-recording-ready"));
     };
   }
 
@@ -89,29 +93,34 @@ export class PadAudioHandler {
 
   public async startPlaying() {
     if (!this.audioBuffer) {
-      this.log.audio("startPlaying called but no buffer");
+      this.log.audio("startPlaying called but no buffer — waiting for decode");
       return;
     }
 
     // Always stop first — handles the restart case cleanly
     this.stopPlaying();
 
-    await this.audioContext.resume();
+    try {
+      await this.audioContext.resume();
+      this.log.audio(`audioContext state: ${this.audioContext.state}`);
 
-    this.sourceNode = this.audioContext.createBufferSource();
-    this.sourceNode.buffer = this.audioBuffer;
-    this.sourceNode.connect(this.audioContext.destination);
-    this.sourceNode.start();
-    this.playbackStartTime = this.audioContext.currentTime;
+      this.sourceNode = this.audioContext.createBufferSource();
+      this.sourceNode.buffer = this.audioBuffer;
+      this.sourceNode.connect(this.audioContext.destination);
+      this.sourceNode.start();
+      this.playbackStartTime = this.audioContext.currentTime;
 
-    this.log.audio(`playback started (${this.audioBuffer.duration.toFixed(3)}s)`);
+      this.log.audio(`playback started (${this.audioBuffer.duration.toFixed(3)}s)`);
 
-    this.sourceNode.onended = () => {
-      this.log.audio("loop-end fired");
-      this.element.dispatchEvent(new CustomEvent("pad-update", {
-        detail: "loop-end",
-      }));
-    };
+      this.sourceNode.onended = () => {
+        this.log.audio("loop-end fired");
+        this.element.dispatchEvent(new CustomEvent("pad-update", {
+          detail: "loop-end",
+        }));
+      };
+    } catch (err) {
+      this.log.audio(`startPlaying failed: ${err}`);
+    }
   }
 
   public stopPlaying() {
