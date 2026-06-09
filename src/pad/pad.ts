@@ -112,7 +112,6 @@ export class Pad {
               this.settings = updated;
               if (!updated.loopable && this.stateMachine.looping) {
                 this.stateMachine.looping = false;
-                this.audioHandler.setLooping(false);
               }
               this.render();
             }
@@ -151,14 +150,10 @@ export class Pad {
       settings: this.settings,
     };
 
-    const prevState = this.state;
-    const prevLooping = this.looping;
     this.stateMachine.transition(event, padContext);
 
     if (event !== "double-press") {
-      this.audioHandler.handleStateChange(this.state, this.looping);
-    } else if (this.looping !== prevLooping) {
-      this.audioHandler.setLooping(this.looping);
+      this.audioHandler.handleStateChange(this.state);
     }
     this.render();
   }

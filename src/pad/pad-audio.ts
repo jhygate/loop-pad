@@ -45,11 +45,12 @@ export class PadAudioHandler {
     this.mediaRecorder.stop();
   }
 
-  public async startPlaying(looping: boolean) {
+  public async startPlaying() {
     if (!this.audioBuffer) {
       console.log("no bugger")
       return;
     }
+    this.playStartTime = this.audioContext.currentTime;
     await this.audioContext.resume();
 
     if (this.sourceNode) {
@@ -59,7 +60,6 @@ export class PadAudioHandler {
 
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
-    this.sourceNode.loop = looping;
     this.sourceNode.connect(this.audioContext.destination);
     this.sourceNode.start();
     this.playStartTime = this.audioContext.currentTime;
@@ -70,10 +70,6 @@ export class PadAudioHandler {
         detail: 'loop-end'
       }))
     }
-  }
-
-  public setLooping(looping: boolean) {
-    if (this.sourceNode) this.sourceNode.loop = looping;
   }
 
   public stopPlaying() {
@@ -101,7 +97,7 @@ export class PadAudioHandler {
     return this.audioContext.currentTime - this.playStartTime;
   }
 
-  public handleStateChange(padState: PadState, looping: boolean) {
+  public handleStateChange(padState: PadState) {
     switch (padState) {
       case "empty":
         this.deleteRecording();
@@ -115,7 +111,7 @@ export class PadAudioHandler {
         break
       case "playing":
         this.stopRecording();
-        this.startPlaying(looping);
+        this.startPlaying();
         break;
 
     }

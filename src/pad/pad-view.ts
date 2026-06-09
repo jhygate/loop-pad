@@ -61,8 +61,14 @@ function getFilledTemplate({
   `;
 
 
-  const percentagePlayed = 100 * audioPlayed/audioLength;
-  const timeLeft = audioLength - audioPlayed;
+  const hasPlayback = audioLength !== null && audioPlayed !== null;
+  const percentagePlayed = hasPlayback ? (100 * audioPlayed! / audioLength!) : 0;
+  const timeLeft = hasPlayback ? (audioLength! - audioPlayed!) : 0;
+
+  const padProgress = !hasPlayback ? `<div class="pad-progress"></div>` : `
+    <div class="pad-progress"
+         style="--start: ${percentagePlayed}%; animation: progressFill ${timeLeft}s linear forwards;"></div>
+  `;
 
   return `
     <div class="pad-container">
@@ -72,7 +78,7 @@ function getFilledTemplate({
         ${padLooping}
       </div>
       ${padIcon}
-      <div class="pad-progress">${progress}</div>
+      ${padProgress}
         </div>
 
     <style>
@@ -130,12 +136,11 @@ function getFilledTemplate({
 
       .pad-progress {
         height: 10%;
-        background: linear-gradient(red, red) left/10% 100% no-repeat;
-        animation: progressFill ${timeLeft}s linear forwards;
+        background: linear-gradient(red, red) left/0 100% no-repeat;
       }
 
       @keyframes progressFill {
-        from { background-size: ${percentagePlayed}%  100%; }
+        from { background-size: var(--start, 0) 100%; }
         to   { background-size: 100% 100%; }
       }
 
