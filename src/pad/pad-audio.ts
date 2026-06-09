@@ -9,6 +9,7 @@ export class PadAudioHandler {
   private audioContext: AudioContext;
   private audioBuffer: AudioBuffer;
   private sourceNode: AudioBufferSourceNode;
+  private playStartTime: number | null;
 
   constructor(stream: MediaStream, audioContext: AudioContext, element: HTMLElement) {
     this.mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 })
@@ -19,6 +20,7 @@ export class PadAudioHandler {
     this.audioContext = audioContext;
     this.audioBuffer = null;
     this.sourceNode = null;
+    this.playStartTime = null;
 
     this.mediaRecorder.ondataavailable = (e) => {
       this.chunks.push(e.data);
@@ -43,17 +45,24 @@ export class PadAudioHandler {
     this.mediaRecorder.stop();
   }
 
-  public async startPlaying() {
+  public async startPlaying(looping: boolean) {
     if (!this.audioBuffer) {
       console.log("no bugger")
       return;
     }
     await this.audioContext.resume();
 
+    if (this.sourceNode) {
+      this.sourceNode.onended = null;
+      this.sourceNode.stop();
+    }
+
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
+    this.sourceNode.loop = looping;
     this.sourceNode.connect(this.audioContext.destination);
     this.sourceNode.start();
+    this.playStartTime = this.audioContext.currentTime;
 
 
     this.sourceNode.onended = () => {
@@ -63,18 +72,36 @@ export class PadAudioHandler {
     }
   }
 
+  public setLooping(looping: boolean) {
+    if (this.sourceNode) this.sourceNode.loop = looping;
+  }
+
   public stopPlaying() {
     this.sourceNode?.stop();
     this.sourceNode = null;
-
+    this.playStartTime = null;
   }
 
   private deleteRecording() {
+    if (this.sourceNode) {
+      this.sourceNode.onended = null;
+      this.sourceNode.stop();
+    }
     this.audioBuffer = null;
     this.sourceNode = null;
+    this.playStartTime = null;
   }
 
-  public handleStateChange(padState: PadState) {
+  public get recordingDuration(): number | null {
+    return this.audioBuffer?.duration ?? null;
+  }
+
+  public get playbackElapsed(): number | null {
+    if (this.playStartTime === null) return null;
+    return this.audioContext.currentTime - this.playStartTime;
+  }
+
+  public handleStateChange(padState: PadState, looping: boolean) {
     switch (padState) {
       case "empty":
         this.deleteRecording();
@@ -87,8 +114,10 @@ export class PadAudioHandler {
         this.stopPlaying();
         break
       case "playing":
-        this.startPlaying();
+        this.stopRecording();
+        this.startPlaying(looping);
         break;
+
     }
   }
 

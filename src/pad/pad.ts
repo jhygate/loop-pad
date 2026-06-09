@@ -110,6 +110,10 @@ export class Pad {
             settings: this.settings,
             onSave: (updated: PadSettings) => {
               this.settings = updated;
+              if (!updated.loopable && this.stateMachine.looping) {
+                this.stateMachine.looping = false;
+                this.audioHandler.setLooping(false);
+              }
               this.render();
             }
           }
@@ -148,9 +152,13 @@ export class Pad {
     };
 
     const prevState = this.state;
+    const prevLooping = this.looping;
     this.stateMachine.transition(event, padContext);
-    if (this.state !== prevState) {
-      this.audioHandler.handleStateChange(this.state);
+
+    if (event !== "double-press") {
+      this.audioHandler.handleStateChange(this.state, this.looping);
+    } else if (this.looping !== prevLooping) {
+      this.audioHandler.setLooping(this.looping);
     }
     this.render();
   }
@@ -164,6 +172,8 @@ export class Pad {
       settingsPressed: this.globalState.settingsPressed,
       holdStartTime: this.holdStartTime,
       settings: this.settings,
+      audioLength: this.audioHandler.recordingDuration,
+      audioPlayed: this.audioHandler.playbackElapsed,
     });
   }
 }

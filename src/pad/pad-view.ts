@@ -28,7 +28,9 @@ export type PadViewProps = {
   progress: number;
   settingsPressed: boolean;
   holdStartTime: number | null;
-  settings: PadSettings; 
+  settings: PadSettings;
+  audioLength: number | null;
+  audioPlayed: number | null;
 };
 
 function getFilledTemplate({
@@ -39,6 +41,8 @@ function getFilledTemplate({
   settingsPressed,
   holdStartTime,
   settings,
+  audioLength,
+  audioPlayed
 }: PadViewProps) {
   const elapsed = holdStartTime === null ? 0 : performance.now() - holdStartTime;
   const delay = HOLD_GRACE_TIME - elapsed;
@@ -55,6 +59,10 @@ function getFilledTemplate({
   const padIcon = `
     <div class="pad-icon ${STATEMAPPING[state].className ?? ""}">${settingsPressed ? "settings" : STATEMAPPING[state].icon}</div>
   `;
+
+
+  const percentagePlayed = 100 * audioPlayed/audioLength;
+  const timeLeft = audioLength - audioPlayed;
 
   return `
     <div class="pad-container">
@@ -123,11 +131,11 @@ function getFilledTemplate({
       .pad-progress {
         height: 10%;
         background: linear-gradient(red, red) left/10% 100% no-repeat;
-        animation: progressFill 10s linear forwards;
+        animation: progressFill ${timeLeft}s linear forwards;
       }
 
       @keyframes progressFill {
-        from { background-size: 10%  100%; }
+        from { background-size: ${percentagePlayed}%  100%; }
         to   { background-size: 100% 100%; }
       }
 

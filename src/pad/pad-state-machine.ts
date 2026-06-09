@@ -51,7 +51,7 @@ const table: Record<PadState, Partial<Record<PadEvent, Transition>>> = {
     "ready-to-play": (_) => "playing"
   },
   "playing": {
-    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "recorded",
+    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "playing",
     "loop-end": (_, looping) => looping ? "playing" : "recorded",
   },
 };
