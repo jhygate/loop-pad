@@ -28,7 +28,7 @@ export type PadContext = {
 export class Pad {
   private stateMachine: PadStateMachine;
   private viewHandler: PadViewHandler;
-  private audoHandler: PadAudioHandler;
+  private audioHandler: PadAudioHandler;
 
   private settings: PadSettings;
 
@@ -47,7 +47,7 @@ export class Pad {
     this.htmlElement = document.getElementById(buttonId);
     this.viewHandler = new PadViewHandler(this.htmlElement);
 
-    this.audoHandler = new PadAudioHandler(stream, audioContext, this.htmlElement);
+    this.audioHandler = new PadAudioHandler(stream, audioContext, this.htmlElement);
 
     this.holdTimerId = -1;
     this.clickCount = 0;
@@ -135,7 +135,7 @@ export class Pad {
     };
 
     this.stateMachine.transition(event, padContext);
-    this.audoHandler.handleStateChange(this.state);
+    this.audioHandler.handleStateChange(this.state);
     this.render();
   }
 
