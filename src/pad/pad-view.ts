@@ -3,6 +3,8 @@
 // needs access to audfio object for animations.
 
 import { PadState } from "./pad-state-machine";
+import { PadSettings } from "./pad-settings"
+import { HOLD_TO_DELETE_TIME, HOLD_GRACE_TIME } from "./pad-constants.js";
 
 const playIcon = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M8 5v14l11-7z"/></svg>`;
 const pauseIcon = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>`;
@@ -19,24 +21,50 @@ const STATEMAPPING: Record<PadState, { icon: string; className?: string }> = {
   "playing":                  { icon: pauseIcon },
 };
 
-function getFilledTemplate(
-  pad_number: number,
-  pad_looping: boolean,
-  pad_state: PadState,
-  pad_progress: number,
-  setting_pressed: boolean
-) {
+export type PadViewProps = {
+  padNumber: number;
+  state: PadState;
+  looping: boolean;
+  progress: number;
+  settingsPressed: boolean;
+  holdStartTime: number | null;
+  settings: PadSettings; 
+};
 
-  
+function getFilledTemplate({
+  padNumber,
+  state,
+  looping,
+  progress,
+  settingsPressed,
+  holdStartTime,
+  settings,
+}: PadViewProps) {
+  const elapsed = holdStartTime === null ? 0 : performance.now() - holdStartTime;
+  const delay = HOLD_GRACE_TIME - elapsed;
+  const duration = HOLD_TO_DELETE_TIME - HOLD_GRACE_TIME;
+  const deleteBar = (holdStartTime === null || state === "empty") ? "" : `
+    <div class="delete-bar" style="animation-delay: ${delay}ms; animation-duration: ${duration}ms;"></div>
+  `;
+
+  const loopingColor = looping ? "black" : "lightgrey";
+  const padLooping = !settings.loopable ? "" : `
+    <div class="pad-looping" style="color: ${loopingColor};">${loopIcon}</div>
+  `;
+
+  const padIcon = `
+    <div class="pad-icon ${STATEMAPPING[state].className ?? ""}">${settingsPressed ? "settings" : STATEMAPPING[state].icon}</div>
+  `;
 
   return `
     <div class="pad-container">
+      ${deleteBar}
       <div class="pad-header">
-        <div class="pad-number">${pad_number}</div>
-        <div class="pad-looping">${pad_looping ? loopIcon : "Not looping i guess"}</div>
+        <div class="pad-number">${padNumber}</div>
+        ${padLooping}
       </div>
-      <div class="pad-icon ${STATEMAPPING[pad_state].className ?? ""}">${setting_pressed ? "settings" : STATEMAPPING[pad_state].icon}</div>
-      <div class="pad-progress">${pad_progress}</div>
+      ${padIcon}
+      <div class="pad-progress">${progress}</div>
         </div>
 
     <style>
@@ -47,6 +75,22 @@ function getFilledTemplate(
         flex-direction: column;
         border-style: solid;
         justify-content: space-between;
+        position: relative;
+      }
+
+      .delete-bar {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(red, red) left/0 100% no-repeat;
+        animation-name: deleteFill;
+        animation-timing-function: linear;
+        pointer-events: none;
+        opacity: 20%;
+      }
+
+      @keyframes deleteFill {
+        from { background-size: 0    100%; }
+        to   { background-size: 100% 100%; }
       }
 
       .pad-header {
@@ -105,7 +149,7 @@ export class PadViewHandler {
     this.htmlElement = htmlElement;
   }
 
-  public render(state: PadState, settings_pressed) {
-    this.htmlElement.innerHTML = getFilledTemplate(1, true, state, 0, settings_pressed);
+  public render(props: PadViewProps) {
+    this.htmlElement.innerHTML = getFilledTemplate(props);
   }
 }

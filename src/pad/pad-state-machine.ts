@@ -64,8 +64,10 @@ function getCrossCuttingTransition(
   ctx: PadContext,
   looping: boolean
 ): PadStateDetails | null {
-  if (event === "double-press" && ctx.settings.loopable)
+  if (event === "double-press" && ctx.settings.loopable){
+    console.log("double press")
     return { state: currentState, looping: !looping };
+  }
 
   if (event === "held" && HELD_STATES.includes(currentState))
     return { state: "empty", looping };
@@ -106,5 +108,7 @@ export class PadStateMachine {
     const next = getNextStateDetails(this.state, event, ctx, this.looping);
     this.state = next.state;
     this.looping = next.looping;
+
+    console.log(this.state);
   }
 }

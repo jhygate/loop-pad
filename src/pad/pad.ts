@@ -35,7 +35,7 @@ export class Pad {
   private htmlElement: HTMLElement;
 
   private holdTimerId: number;
-  private held: boolean;
+  private holdStartTime: number | null;
 
   private clickCount: number;
 
@@ -51,14 +51,14 @@ export class Pad {
 
     this.holdTimerId = -1;
     this.clickCount = 0;
-    this.held = false;
+    this.holdStartTime = null;
 
     this.settings = {
       recordSyncStart: false,
       recordSyncEnd: false,
       playSyncStart: false,
       playingPressBehavior: "stop",
-      loopable: false
+      loopable: true,
 
     }
     this.globalState = globalState;
@@ -76,34 +76,41 @@ export class Pad {
     return this.stateMachine.looping;
   }
 
+
   private bindUI() {
     this.htmlElement.addEventListener("pointerdown", () => {
       this.clickCount += 1;
+      this.holdStartTime = performance.now();
+      this.render();
 
       setTimeout(() => {
         this.clickCount = 0;
       }, DOUBLE_CLICK_TIME);
 
       this.holdTimerId = setTimeout(() => {
-        this.held = true;
         this.transitionState("held");
       }, HOLD_TO_DELETE_TIME);
     });
 
     this.htmlElement.addEventListener("pointerup", () => {
-      if (this.held) {
-        this.held = false;
+      const wasHeld = this.holdStartTime !== null
+        && performance.now() - this.holdStartTime >= HOLD_TO_DELETE_TIME;
+      this.holdStartTime = null;
+      clearTimeout(this.holdTimerId);
+
+      if (wasHeld) {
+        this.render();
         return;
       }
 
-      clearTimeout(this.holdTimerId);
-
       if (this.globalState.settingsPressed) {
+        this.render();
         document.dispatchEvent(new CustomEvent("open-pad-settings", {
           detail: {
             settings: this.settings,
             onSave: (updated: PadSettings) => {
               this.settings = updated;
+              this.render();
             }
           }
         }));
@@ -114,6 +121,12 @@ export class Pad {
       } else if (this.clickCount == 2) {
         this.transitionState("double-press");
       }
+    });
+
+    this.htmlElement.addEventListener("pointercancel", () => {
+      this.holdStartTime = null;
+      clearTimeout(this.holdTimerId);
+      this.render();
     });
   }
 
@@ -134,12 +147,23 @@ export class Pad {
       settings: this.settings,
     };
 
+    const prevState = this.state;
     this.stateMachine.transition(event, padContext);
-    this.audioHandler.handleStateChange(this.state);
+    if (this.state !== prevState) {
+      this.audioHandler.handleStateChange(this.state);
+    }
     this.render();
   }
 
   public render() {
-    this.viewHandler.render(this.state, this.globalState.settingsPressed);
+    this.viewHandler.render({
+      padNumber: 1,
+      state: this.state,
+      looping: this.looping,
+      progress: 0,
+      settingsPressed: this.globalState.settingsPressed,
+      holdStartTime: this.holdStartTime,
+      settings: this.settings,
+    });
   }
 }
