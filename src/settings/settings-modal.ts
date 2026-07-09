@@ -21,8 +21,17 @@ function getFilledTemplate(pad: Pad, allPadIds: number[]) {
       <div style="display: flex; flex-direction: column;">
         ${checkbox("loopable", "Loopable", s.loopable)}
         ${checkbox("recordSyncStart", "Record sync start", s.recordSyncStart)}
+        <label>Record sync start threshold (ms)
+          <input type="number" name="recordSyncStartThresholdMs" step="10" min="0" value="${s.recordSyncStartThresholdMs}">
+        </label>
         ${checkbox("recordSyncEnd", "Record sync end", s.recordSyncEnd)}
+        <label>Record sync end threshold (ms)
+          <input type="number" name="recordSyncEndThresholdMs" step="10" min="0" value="${s.recordSyncEndThresholdMs}">
+        </label>
         ${checkbox("playSyncStart", "Play sync start", s.playSyncStart)}
+        <label>Play sync start threshold (ms)
+          <input type="number" name="playSyncStartThresholdMs" step="10" min="0" value="${s.playSyncStartThresholdMs}">
+        </label>
         <label>Play behavior
           <select name="playingPressBehavior">
             <option value="stop"${s.playingPressBehavior === "stop" ? " selected" : ""}>Stop</option>
@@ -54,8 +63,11 @@ function readSettings(form: HTMLFormElement): PadSettings {
     loopable: data.has("loopable"),
     playingPressBehavior: data.get("playingPressBehavior") as "stop" | "restart",
     recordSyncStart: data.has("recordSyncStart"),
+    recordSyncStartThresholdMs: Number(data.get("recordSyncStartThresholdMs")),
     recordSyncEnd: data.has("recordSyncEnd"),
+    recordSyncEndThresholdMs: Number(data.get("recordSyncEndThresholdMs")),
     playSyncStart: data.has("playSyncStart"),
+    playSyncStartThresholdMs: Number(data.get("playSyncStartThresholdMs")),
     audioThreshold: Number(data.get("audioThreshold")),
     thresholdStart: data.has("thresholdStart"),
     thresholdEnd: data.has("thresholdEnd"),

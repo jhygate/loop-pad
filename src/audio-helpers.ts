@@ -66,6 +66,35 @@ export function trimBuffer(
   return trimmed;
 }
 
+export type RecordingAdjustment = {
+  prependMs: number;
+  appendMs: number;
+  trimEndMs: number;
+};
+
+export function adjustRecording(
+  buffer: AudioBuffer,
+  audioContext: AudioContext,
+  adj: RecordingAdjustment,
+): AudioBuffer {
+  if (adj.prependMs === 0 && adj.appendMs === 0 && adj.trimEndMs === 0) return buffer;
+
+  const rate = buffer.sampleRate;
+  const prepend = Math.max(0, Math.floor(adj.prependMs / 1000 * rate));
+  const append = Math.max(0, Math.floor(adj.appendMs / 1000 * rate));
+  const trimEnd = Math.max(0, Math.floor(adj.trimEndMs / 1000 * rate));
+  const kept = Math.max(0, buffer.length - trimEnd);
+  const newLength = prepend + kept + append;
+  if (newLength <= 0) return buffer;
+
+  const out = audioContext.createBuffer(buffer.numberOfChannels, newLength, rate);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const src = buffer.getChannelData(c);
+    out.copyToChannel(src.subarray(0, kept), c, prepend);
+  }
+  return out;
+}
+
 export function computeMaxGain(buffer: AudioBuffer): number {
   const channels: Float32Array[] = [];
   for (let c = 0; c < buffer.numberOfChannels; c++) {

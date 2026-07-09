@@ -56,7 +56,7 @@ const rules: Rule[] = [
 
   {
     from: "empty", event: "press",
-    to: ({ ctx }) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording"
+    to: ({ ctx }) => ctx.syncStartDecision === "wait" ? "waiting-to-record" : "recording"
   },
 
   {
@@ -66,7 +66,7 @@ const rules: Rule[] = [
 
   {
     from: "recording", event: "press",
-    to: ({ ctx }) => ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "processing-recording"
+    to: ({ ctx }) => ctx.syncEndDecision === "wait" ? "waiting-to-end-recording" : "processing-recording"
   },
 
   {
@@ -81,7 +81,7 @@ const rules: Rule[] = [
 
   {
     from: "recorded", event: "press",
-    to: ({ ctx }) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing"
+    to: ({ ctx }) => ctx.playSyncDecision === "wait" ? "waiting-to-play" : "playing"
   },
 
   {
