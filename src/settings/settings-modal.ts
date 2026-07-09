@@ -1,5 +1,6 @@
 import type { PadSettings } from "@/pad/pad.js";
 import type { Pad } from "@/pad/pad.js";
+import { RECORDING_STATES } from "@/pad/pad.js";
 import { signal, effect } from "@/signals.js";
 
 export const settingsPressed = signal(false);
@@ -8,8 +9,13 @@ export const selectedPad = signal<number | null>(null);
 const checkbox = (name: string, label: string, checked: boolean) =>
   `<label>${label}<input type="checkbox" name="${name}"${checked ? " checked" : ""}></label>`;
 
-function getFilledTemplate(pad: Pad) {
+function getFilledTemplate(pad: Pad, allPadIds: number[]) {
   const s = pad.getSettings();
+  const peerCheckboxes = allPadIds
+    .filter(id => id !== pad.id)
+    .map(id => `<label><input type="checkbox" name="recordSource" value="${id}"${s.recordSources.includes(id) ? " checked" : ""}> Pad ${id}</label>`)
+    .join("");
+
   return `
     <form method="dialog">
       <div style="display: flex; flex-direction: column;">
@@ -31,6 +37,11 @@ function getFilledTemplate(pad: Pad) {
         <label>Volume
           <input type="range" name="volume" min="0" max="${pad.maxVolume}" step="0.01" value="${s.volume}">
         </label>
+        <fieldset data-role="record-sources">
+          <legend>Record from</legend>
+          ${checkbox("recordMic", "Microphone", s.recordMic)}
+          ${peerCheckboxes}
+        </fieldset>
         <button>Close</button>
       </div>
     </form>
@@ -49,14 +60,18 @@ function readSettings(form: HTMLFormElement): PadSettings {
     thresholdStart: data.has("thresholdStart"),
     thresholdEnd: data.has("thresholdEnd"),
     volume: Number(data.get("volume")),
+    recordMic: data.has("recordMic"),
+    recordSources: data.getAll("recordSource").map(v => Number(v)),
   };
 }
 
 export class SettingsModal {
   private dialog: HTMLDialogElement;
+  private padIds: number[];
 
   constructor(settingsModalId: string, settingsButtonId: string, pads: Record<number, Pad>) {
     this.dialog = document.getElementById(settingsModalId) as HTMLDialogElement;
+    this.padIds = Object.keys(pads).map(Number);
 
     effect(() => {
       if (selectedPad.value == null) return
@@ -78,12 +93,20 @@ export class SettingsModal {
 
 
   open(pad: Pad) {
-    this.dialog.innerHTML = getFilledTemplate(pad);
+    this.dialog.innerHTML = getFilledTemplate(pad, this.padIds);
     this.dialog.showModal();
 
     const form = this.dialog.querySelector("form");
     form.addEventListener("input", () => {
       pad.setSettings(readSettings(form));
+    });
+
+    const volume = form.querySelector<HTMLInputElement>('input[name="volume"]');
+    const recordSources = form.querySelector<HTMLFieldSetElement>('fieldset[data-role="record-sources"]');
+    effect(() => {
+      const disabled = RECORDING_STATES.includes(pad.stateSignal.value);
+      volume.disabled = disabled;
+      recordSources.disabled = disabled;
     });
   }
 }

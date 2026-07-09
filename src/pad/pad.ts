@@ -5,7 +5,7 @@ import {
   UserPadEvent,
 } from "@/pad/pad-state-machine.js";
 import { settingsPressed, selectedPad } from "@/settings/settings-modal.js";
-import { effect } from "@/signals.js";
+import { effect, signal } from "@/signals.js";
 import { PadViewHandler } from "@/pad/pad-view.js";
 import { PadAudioHandler } from "@/pad/pad-audio.js";
 import { PadUserInputHandler } from "@/pad/pad-user-input.js";
@@ -21,7 +21,16 @@ export type PadSettings = {
   thresholdStart: boolean;
   thresholdEnd: boolean;
   volume: number;
+  recordMic: boolean;
+  recordSources: number[];
 }
+
+export const RECORDING_STATES: PadState[] = [
+  "waiting-to-record",
+  "recording",
+  "waiting-to-end-recording",
+  "processing-recording",
+];
 
 export type PadContext = {
   settingsPressed: boolean;
@@ -40,6 +49,8 @@ const DEFAULT_SETTINGS: PadSettings = {
   thresholdStart: false,
   thresholdEnd: false,
   volume: 1,
+  recordMic: true,
+  recordSources: [],
 };
 
 export class Pad {
@@ -52,7 +63,14 @@ export class Pad {
 
   private settings: PadSettings = { ...DEFAULT_SETTINGS };
 
-  constructor(id: number, stream: MediaStream, audioContext: AudioContext) {
+  public readonly stateSignal = signal<PadState>("empty");
+
+  constructor(
+    id: number,
+    stream: MediaStream,
+    audioContext: AudioContext,
+    private readonly peers: Record<number, Pad>,
+  ) {
     this.id = id;
     this.htmlElement = document.getElementById(`pad${id}`);
     this.viewHandler = new PadViewHandler(this.htmlElement);
@@ -61,6 +79,8 @@ export class Pad {
       audioContext,
       () => this.settings,
       (event) => this.transitionState(event),
+      (peerId) => this.peers[peerId]?.getOutputTap() ?? null,
+      () => this.render(),
     );
     this.inputHandler = new PadUserInputHandler(
       this.htmlElement,
@@ -70,6 +90,10 @@ export class Pad {
 
     effect(() => this.render());
     this.render();
+  }
+
+  public getOutputTap(): AudioNode {
+    return this.audioHandler.outputTap;
   }
 
   public get state(): PadState {
@@ -111,6 +135,7 @@ export class Pad {
     };
 
     this.stateMachine.transition(event, padContext);
+    this.stateSignal.value = this.stateMachine.state;
 
     if (event !== "double-press") {
       this.audioHandler.handleStateChange(this.state);

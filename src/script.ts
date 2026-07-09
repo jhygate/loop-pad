@@ -12,7 +12,7 @@ class main {
     if (!stream) return;
 
     for (let i = 1; i <= 9; i++) {
-      this.pads[i] = new Pad(i, stream, audioCtx);
+      this.pads[i] = new Pad(i, stream, audioCtx, this.pads);
     }
 
     this.settingsModal = new SettingsModal(

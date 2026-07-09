@@ -5,6 +5,9 @@ import { trimBuffer, computeMaxGain, type TrimOptions } from "@/audio-helpers.js
 export class PadAudioHandler {
   private readonly mediaRecorder: MediaRecorder;
   private readonly gainNode: GainNode;
+  private readonly micSource: MediaStreamAudioSourceNode;
+  private readonly recordInput: MediaStreamAudioDestinationNode;
+  private connectedSources: AudioNode[] = [];
   private chunks: Blob[] = [];
   private audioBuffer: AudioBuffer | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
@@ -16,8 +19,12 @@ export class PadAudioHandler {
     private readonly audioContext: AudioContext,
     private readonly getSettings: () => PadSettings,
     private readonly onControllerEvent: (event: ControllerPadEvent) => void,
+    private readonly getPeerOutput: (padId: number) => AudioNode | null,
+    private readonly onChange: () => void,
   ) {
-    this.mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 });
+    this.recordInput = audioContext.createMediaStreamDestination();
+    this.mediaRecorder = new MediaRecorder(this.recordInput.stream, { audioBitsPerSecond: 128000 });
+    this.micSource = audioContext.createMediaStreamSource(stream);
 
     this.gainNode = audioContext.createGain();
     this.gainNode.gain.value = this.getSettings().volume;
@@ -30,12 +37,8 @@ export class PadAudioHandler {
     this.mediaRecorder.onstop = () => this.processRecording();
   }
 
-  public setVolume(v: number) {
-    this.gainNode.gain.value = v;
-  }
-
-  public get maxGain(): number {
-    return this._maxGain;
+  public get outputTap(): AudioNode {
+    return this.gainNode;
   }
 
   public handleStateChange(padState: PadState) {
@@ -60,11 +63,32 @@ export class PadAudioHandler {
 
   public startRecording() {
     this.chunks = [];
+    this.wireRecordSources();
     this.mediaRecorder.start();
   }
 
   public stopRecording() {
     this.mediaRecorder.stop();
+    this.unwireRecordSources();
+  }
+
+  private wireRecordSources() {
+    const s = this.getSettings();
+    const sources: AudioNode[] = [];
+    if (s.recordMic) sources.push(this.micSource);
+    for (const peerId of s.recordSources) {
+      const tap = this.getPeerOutput(peerId);
+      if (tap) sources.push(tap);
+    }
+    for (const source of sources) source.connect(this.recordInput);
+    this.connectedSources = sources;
+  }
+
+  private unwireRecordSources() {
+    for (const source of this.connectedSources) {
+      try { source.disconnect(this.recordInput); } catch { /* already disconnected */ }
+    }
+    this.connectedSources = [];
   }
 
   private async processRecording() {
@@ -97,6 +121,8 @@ export class PadAudioHandler {
     this.sourceNode.onended = () => {
       this.onControllerEvent('loop-end');
     };
+
+    this.onChange();
   }
 
   public stopPlaying() {
@@ -134,5 +160,13 @@ export class PadAudioHandler {
   public get playbackElapsed(): number | null {
     if (this.playStartTime === null) return null;
     return this.audioContext.currentTime - this.playStartTime;
+  }
+
+  public setVolume(v: number) {
+    this.gainNode.gain.value = v;
+  }
+
+  public get maxGain(): number {
+    return this._maxGain;
   }
 }
