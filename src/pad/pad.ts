@@ -10,6 +10,7 @@ import { effect, signal } from "@/signals.js";
 import { PadViewHandler } from "@/pad/pad-view.js";
 import { PadAudioHandler } from "@/pad/pad-audio.js";
 import { PadUserInputHandler } from "@/pad/pad-user-input.js";
+import type { Metronome } from "@/metronome/metronome.js";
 
 
 export type PadSettings = {
@@ -97,6 +98,7 @@ export class Pad {
     stream: MediaStream,
     audioContext: AudioContext,
     private readonly peers: Record<number, Pad>,
+    private readonly metronome: Metronome | null,
   ) {
     this.id = id;
     this.htmlElement = document.getElementById(`pad${id}`);
@@ -276,14 +278,17 @@ export class Pad {
   private nearestPeerBoundary(): number | null {
     const now = this.audioHandler.now();
     let nearest: number | null = null;
-    for (const peer of Object.values(this.peers)) {
-      if (peer === this) continue;
-      const b = peer.getNearestLoopBoundary();
-      if (b === null) continue;
+    const consider = (b: number | null) => {
+      if (b === null) return;
       if (nearest === null || Math.abs(b - now) < Math.abs(nearest - now)) {
         nearest = b;
       }
+    };
+    for (const peer of Object.values(this.peers)) {
+      if (peer === this) continue;
+      consider(peer.getNearestLoopBoundary());
     }
+    if (this.metronome) consider(this.metronome.getNearestLoopBoundary());
     return nearest;
   }
 
