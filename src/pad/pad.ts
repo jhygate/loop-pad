@@ -2,16 +2,13 @@ import {
   PadStateMachine,
   PadState,
   PadEvent,
-  ControllerPadEvent
+  UserPadEvent,
 } from "@/pad/pad-state-machine.js";
 import { settingsPressed, selectedPad } from "@/settings/settings-modal.js";
 import { effect } from "@/signals.js";
 import { PadViewHandler } from "@/pad/pad-view.js";
-import {
-  DOUBLE_CLICK_TIME,
-  HOLD_TO_DELETE_TIME,
-} from "@/pad/pad-constants.js";
 import { PadAudioHandler } from "@/pad/pad-audio.js";
+import { PadUserInputHandler } from "@/pad/pad-user-input.js";
 
 
 export type PadSettings = {
@@ -23,6 +20,7 @@ export type PadSettings = {
   audioThreshold: number;
   thresholdStart: boolean;
   thresholdEnd: boolean;
+  volume: number;
 }
 
 export type PadContext = {
@@ -32,49 +30,45 @@ export type PadContext = {
 
 
 
+const DEFAULT_SETTINGS: PadSettings = {
+  recordSyncStart: false,
+  recordSyncEnd: false,
+  playSyncStart: false,
+  playingPressBehavior: "stop",
+  loopable: true,
+  audioThreshold: 0,
+  thresholdStart: false,
+  thresholdEnd: false,
+  volume: 1,
+};
+
 export class Pad {
-  private stateMachine: PadStateMachine;
-  private viewHandler: PadViewHandler;
-  private audioHandler: PadAudioHandler;
+  public readonly id: number;
+  private readonly htmlElement: HTMLElement;
+  private readonly stateMachine = new PadStateMachine();
+  private readonly viewHandler: PadViewHandler;
+  private readonly audioHandler: PadAudioHandler;
+  private readonly inputHandler: PadUserInputHandler;
 
-  private settings: PadSettings;
+  private settings: PadSettings = { ...DEFAULT_SETTINGS };
 
-  private htmlElement: HTMLElement;
-
-  private holdTimerId: number;
-  private holdStartTime: number | null;
-
-  private clickCount: number;
-
-
-  public readonly id: string;
-
-  constructor(id: string, stream: MediaStream, audioContext: AudioContext) {
+  constructor(id: number, stream: MediaStream, audioContext: AudioContext) {
     this.id = id;
-    this.stateMachine = new PadStateMachine();
-
-    this.htmlElement = document.getElementById(id);
+    this.htmlElement = document.getElementById(`pad${id}`);
     this.viewHandler = new PadViewHandler(this.htmlElement);
+    this.audioHandler = new PadAudioHandler(
+      stream,
+      audioContext,
+      () => this.settings,
+      (event) => this.transitionState(event),
+    );
+    this.inputHandler = new PadUserInputHandler(
+      this.htmlElement,
+      (gesture) => this.handleGesture(gesture),
+      () => this.render(),
+    );
 
-    this.audioHandler = new PadAudioHandler(stream, audioContext, this.htmlElement, () => this.settings);
-
-    this.holdTimerId = -1;
-    this.clickCount = 0;
-    this.holdStartTime = null;
-
-    this.settings = {
-      recordSyncStart: false,
-      recordSyncEnd: false,
-      playSyncStart: false,
-      playingPressBehavior: "stop",
-      loopable: true,
-      audioThreshold: 0,
-      thresholdStart: false,
-      thresholdEnd: false,
-    }
-
-    this.bindUI();
-    this.setupListeners();
+    effect(() => this.render());
     this.render();
   }
 
@@ -92,64 +86,22 @@ export class Pad {
 
   public setSettings(updated: PadSettings) {
     this.settings = updated;
-    if (!updated.loopable && this.stateMachine.looping) {
-      this.stateMachine.looping = false;
-    }
+    if (!updated.loopable) this.stateMachine.disableLooping();
+    this.audioHandler.setVolume(updated.volume);
     this.render();
   }
 
-
-  private bindUI() {
-    this.htmlElement.addEventListener("pointerdown", () => {
-      this.clickCount += 1;
-      this.holdStartTime = performance.now();
-      this.render();
-
-      setTimeout(() => {
-        this.clickCount = 0;
-      }, DOUBLE_CLICK_TIME);
-
-      this.holdTimerId = setTimeout(() => {
-        this.transitionState("held");
-      }, HOLD_TO_DELETE_TIME);
-    });
-
-    this.htmlElement.addEventListener("pointerup", () => {
-      const wasHeld = this.holdStartTime !== null
-        && performance.now() - this.holdStartTime >= HOLD_TO_DELETE_TIME;
-      this.holdStartTime = null;
-      clearTimeout(this.holdTimerId);
-      this.render();
-
-      if (wasHeld) return;
-
-      if (settingsPressed.value === true) {
-        selectedPad.value = this.id
-        return;  // don't fall through to normal press logic
-      }
-      if (this.clickCount == 1) {
-        this.transitionState("press");
-      } else if (this.clickCount == 2) {
-        this.transitionState("double-press");
-      }
-    });
-
-    this.htmlElement.addEventListener("pointercancel", () => {
-      this.holdStartTime = null;
-      clearTimeout(this.holdTimerId);
-      this.render();
-    });
+  public get maxVolume(): number {
+    return this.audioHandler.maxGain;
   }
 
-  private setupListeners() {
-    this.htmlElement.addEventListener('pad-update', (e: Event) => {
-      const customEvent = e as CustomEvent<ControllerPadEvent>;
-      this.transitionState(customEvent.detail);
-    });
 
-    effect(() => {
-      this.render()
-    })
+  private handleGesture(gesture: UserPadEvent) {
+    if (settingsPressed.value && gesture !== "held") {
+      selectedPad.value = this.id;
+      return;
+    }
+    this.transitionState(gesture);
   }
 
   private transitionState(event: PadEvent) {
@@ -168,11 +120,11 @@ export class Pad {
 
   public render() {
     this.viewHandler.render({
-      padNumber: 1,
+      padNumber: this.id,
       state: this.state,
       looping: this.looping,
       settingsPressed: settingsPressed.value,
-      holdStartTime: this.holdStartTime,
+      holdStartTime: this.inputHandler.holdStartTime,
       settings: this.settings,
       audioLength: this.audioHandler.recordingDuration,
       audioPlayed: this.audioHandler.playbackElapsed,

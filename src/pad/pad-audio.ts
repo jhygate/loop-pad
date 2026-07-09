@@ -1,54 +1,60 @@
-import { PadState } from "@/pad/pad-state-machine.js";
+import { PadState, ControllerPadEvent } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
+import { trimBuffer, computeMaxGain, type TrimOptions } from "@/audio-helpers.js";
 
 export class PadAudioHandler {
-  private mediaRecorder: MediaRecorder;
-  private chunks: Blob[];
-
-  private element: HTMLElement;
-
-  private audioContext: AudioContext;
-  private audioBuffer: AudioBuffer;
-  private sourceNode: AudioBufferSourceNode;
-  private playStartTime: number | null;
-  private getSettings: () => PadSettings;
+  private readonly mediaRecorder: MediaRecorder;
+  private readonly gainNode: GainNode;
+  private chunks: Blob[] = [];
+  private audioBuffer: AudioBuffer | null = null;
+  private sourceNode: AudioBufferSourceNode | null = null;
+  private playStartTime: number | null = null;
+  private _maxGain = 1;
 
   constructor(
     stream: MediaStream,
-    audioContext: AudioContext,
-    element: HTMLElement,
-    getSettings: () => PadSettings,
+    private readonly audioContext: AudioContext,
+    private readonly getSettings: () => PadSettings,
+    private readonly onControllerEvent: (event: ControllerPadEvent) => void,
   ) {
-    this.mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 })
-    this.chunks = [];
+    this.mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 });
 
-    this.element = element;
-
-    this.audioContext = audioContext;
-    this.audioBuffer = null;
-    this.sourceNode = null;
-    this.playStartTime = null;
-    this.getSettings = getSettings;
+    this.gainNode = audioContext.createGain();
+    this.gainNode.gain.value = this.getSettings().volume;
+    this.gainNode.connect(audioContext.destination);
 
     this.mediaRecorder.ondataavailable = (e) => {
       this.chunks.push(e.data);
-    }
+    };
 
-    this.mediaRecorder.onstop = async () => {
-      try {
-        const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
-        const arrayBuffer = await blob.arrayBuffer();
-        const buffer = await this.audioContext.decodeAudioData(arrayBuffer);
-        this.normalizeBuffer(buffer);
-        this.audioBuffer = this.trimBuffer(buffer);
-        this.chunks = [];
-      } catch (e) {
-        console.error("recording decode failed", e);
-      } finally {
-        this.element.dispatchEvent(new CustomEvent('pad-update', {
-          detail: 'processing-recording-complete'
-        }));
-      }
+    this.mediaRecorder.onstop = () => this.processRecording();
+  }
+
+  public setVolume(v: number) {
+    this.gainNode.gain.value = v;
+  }
+
+  public get maxGain(): number {
+    return this._maxGain;
+  }
+
+  public handleStateChange(padState: PadState) {
+    switch (padState) {
+      case "empty":
+        this.deleteRecording();
+        break;
+      case "recording":
+        this.startRecording();
+        break;
+      case "processing-recording":
+        this.stopRecording();
+        break;
+      case "recorded":
+        this.stopPlaying();
+        break;
+      case "playing":
+        this.startPlaying();
+        break;
     }
   }
 
@@ -61,103 +67,64 @@ export class PadAudioHandler {
     this.mediaRecorder.stop();
   }
 
-  private normalizeBuffer(buffer: AudioBuffer): void {
-    let peak = 0;
-    for (let c = 0; c < buffer.numberOfChannels; c++) {
-      const ch = buffer.getChannelData(c);
-      for (let i = 0; i < ch.length; i++) {
-        const abs = Math.abs(ch[i]);
-        if (abs > peak) peak = abs;
-      }
+  private async processRecording() {
+    try {
+      const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
+      const arrayBuffer = await blob.arrayBuffer();
+      const buffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      this.audioBuffer = trimBuffer(buffer, this.audioContext, this.trimOptions());
+      this._maxGain = computeMaxGain(this.audioBuffer);
+    } catch (e) {
+      console.error("recording decode failed", e);
+    } finally {
+      this.onControllerEvent('processing-recording-complete');
     }
-    if (peak === 0) return;
-
-    const scale = 1 / peak;
-    for (let c = 0; c < buffer.numberOfChannels; c++) {
-      const ch = buffer.getChannelData(c);
-      for (let i = 0; i < ch.length; i++) {
-        ch[i] *= scale;
-      }
-    }
-  }
-
-  private trimBuffer(buffer: AudioBuffer): AudioBuffer {
-    const settings = this.getSettings();
-    if (!settings.thresholdStart && !settings.thresholdEnd) return buffer;
-
-    const channels: Float32Array[] = [];
-    for (let c = 0; c < buffer.numberOfChannels; c++) {
-      channels.push(buffer.getChannelData(c));
-    }
-
-    const audible = (i: number) =>
-      channels.some(ch => Math.abs(ch[i]) > settings.audioThreshold);
-
-    let start = 0;
-    let end = buffer.length;
-
-    if (settings.thresholdStart) {
-      while (start < end && !audible(start)) start++;
-    }
-    if (settings.thresholdEnd) {
-      while (end > start && !audible(end - 1)) end--;
-    }
-
-    const newLength = end - start;
-    if (newLength <= 0) return buffer;
-
-    const trimmed = this.audioContext.createBuffer(
-      buffer.numberOfChannels,
-      newLength,
-      buffer.sampleRate
-    );
-    for (let c = 0; c < buffer.numberOfChannels; c++) {
-      trimmed.copyToChannel(buffer.getChannelData(c).subarray(start, end), c);
-    }
-    return trimmed;
   }
 
   public async startPlaying() {
-    if (!this.audioBuffer) {
-      console.log("no bugger")
-      return;
-    }
-    this.playStartTime = this.audioContext.currentTime;
+    if (!this.audioBuffer) return;
+
     await this.audioContext.resume();
 
-    if (this.sourceNode) {
-      this.sourceNode.onended = null;
-      this.sourceNode.stop();
-    }
+    this.stopSource();
 
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
-    this.sourceNode.connect(this.audioContext.destination);
+    this.sourceNode.connect(this.gainNode);
     this.sourceNode.start();
     this.playStartTime = this.audioContext.currentTime;
 
-
     this.sourceNode.onended = () => {
-      this.element.dispatchEvent(new CustomEvent('pad-update', {
-        detail: 'loop-end'
-      }))
-    }
+      this.onControllerEvent('loop-end');
+    };
   }
 
   public stopPlaying() {
-    this.sourceNode?.stop();
-    this.sourceNode = null;
-    this.playStartTime = null;
+    this.stopSource();
   }
 
   private deleteRecording() {
+    this.stopSource();
+    this.audioBuffer = null;
+    this._maxGain = 1;
+  }
+
+  private stopSource() {
     if (this.sourceNode) {
       this.sourceNode.onended = null;
       this.sourceNode.stop();
     }
-    this.audioBuffer = null;
     this.sourceNode = null;
     this.playStartTime = null;
+  }
+
+  private trimOptions(): TrimOptions {
+    const s = this.getSettings();
+    return {
+      threshold: s.audioThreshold,
+      trimStart: s.thresholdStart,
+      trimEnd: s.thresholdEnd,
+    };
   }
 
   public get recordingDuration(): number | null {
@@ -168,27 +135,4 @@ export class PadAudioHandler {
     if (this.playStartTime === null) return null;
     return this.audioContext.currentTime - this.playStartTime;
   }
-
-  public handleStateChange(padState: PadState) {
-    switch (padState) {
-      case "empty":
-        this.deleteRecording();
-        break
-      case "recording":
-        this.startRecording();
-        break
-      case "processing-recording":
-        this.stopRecording();
-        break
-      case "recorded":
-        this.stopPlaying();
-        break
-      case "playing":
-        this.startPlaying();
-        break;
-
-    }
-  }
-
-
 }

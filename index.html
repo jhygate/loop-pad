@@ -5,11 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Loop Pad</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./src/pad/pad.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "@/": "/dist/"
+        }
+      }
+    </script>
     <script type="module" src="./dist/script.js"></script>
   </head>
   <body>
-    <div id="pad-box1">TEST</div>
-    <div id="pad-box2">TEST</div>
+    <div id="pad-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 480px; margin: 20px auto;">
+      <div id="pad1"></div>
+      <div id="pad2"></div>
+      <div id="pad3"></div>
+      <div id="pad4"></div>
+      <div id="pad5"></div>
+      <div id="pad6"></div>
+      <div id="pad7"></div>
+      <div id="pad8"></div>
+      <div id="pad9"></div>
+    </div>
 
     <button id="settings-button">SETTINGS</button>
     <dialog id="pad-settings-dialog">

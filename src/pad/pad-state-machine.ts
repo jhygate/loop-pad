@@ -120,18 +120,21 @@ function getNextStateDetails(
 }
 
 export class PadStateMachine {
-  public state: PadState;
-  public looping: boolean;
+  public state: PadState = "empty";
+  private _looping: boolean = true;
 
-  constructor() {
-    this.state = "empty";
-    this.looping = true;
+  public get looping(): boolean {
+    return this._looping;
+  }
+
+  public disableLooping() {
+    this._looping = false;
   }
 
   public transition(event: PadEvent, ctx: PadContext) {
-    const next = getNextStateDetails(this.state, event, ctx, this.looping);
+    const next = getNextStateDetails(this.state, event, ctx, this._looping);
     this.state = next.state;
-    this.looping = next.looping;
+    this._looping = next.looping;
 
     console.log(this.state);
   }

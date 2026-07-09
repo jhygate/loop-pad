@@ -1,54 +1,26 @@
-import { Pad } from "./pad/pad.js";
-import { SettingsModal } from "./settings/settings-modal.js";
-
-export type GlobalState = {
-  settingsPressed: boolean;
-};
-
-const globalState: GlobalState = { settingsPressed: false };
+import { Pad } from "@/pad/pad.js";
+import { SettingsModal } from "@/settings/settings-modal.js";
+import { getStream } from "@/audio-helpers.js";
 
 class main {
-  pad1: Pad;
-  pad2: Pad;
+  pads: Record<number, Pad> = {};
   settingsModal: SettingsModal;
 
-  constructor() {
+  async init() {
     const audioCtx = new AudioContext();
-    const dialogEl = document.getElementById("pad-settings-dialog") as HTMLDialogElement;
-    this.settingsModal = new SettingsModal(dialogEl);
+    const stream = await getStream();
+    if (!stream) return;
 
-    // Listen for pads requesting the modal
-    document.addEventListener("open-pad-settings", (e: Event) => {
-      const { settings, onSave } = (e as CustomEvent).detail;
-      this.settingsModal.open(settings, onSave);
-      globalState.settingsPressed = false;
-      document.dispatchEvent(new CustomEvent('global-state-update'));
-
-    });
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-      navigator.mediaDevices.getUserMedia(
-        {
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        },
-      )
-        .then((stream) => {
-          this.pad1 = new Pad("pad-box1", stream, audioCtx, globalState);
-          this.pad2 = new Pad("pad-box2", stream, audioCtx, globalState);
-        })
-        .catch((err) => { console.error(err) });
+    for (let i = 1; i <= 9; i++) {
+      this.pads[i] = new Pad(i, stream, audioCtx);
     }
-    document.getElementById("settings-button")
-      .addEventListener("click", () => {
-        globalState.settingsPressed = !globalState.settingsPressed;
-        document.dispatchEvent(new CustomEvent('global-state-update'));
-      });
 
+    this.settingsModal = new SettingsModal(
+      "pad-settings-dialog",
+      "settings-button",
+      this.pads);
   }
 }
 
 (window as any).app = new main();
+(window as any).app.init();
