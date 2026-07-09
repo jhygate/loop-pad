@@ -1,10 +1,11 @@
-import { type PadContext } from "./pad.js";
+import { type PadContext } from "@/pad/pad.js";
 
 export type PadState =
   | "empty"
   | "waiting-to-record"
   | "recording"
   | "waiting-to-end-recording"
+  | "processing-recording"
   | "recorded"
   | "waiting-to-play"
   | "playing"
@@ -24,75 +25,98 @@ export type ControllerPadEvent =
   | "ready-to-record"
   | "ready-to-end-recording"
   | "ready-to-play"
+  | "processing-recording-complete"
 
-export type PadEvent =
-  UserPadEvent | ControllerPadEvent
+export type PadEvent = UserPadEvent | ControllerPadEvent
 
 
-type Transition = (ctx: PadContext, looping: boolean) => PadState;
+type RuleArgs = { ctx: PadContext; state: PadState; looping: boolean };
 
-const table: Record<PadState, Partial<Record<PadEvent, Transition>>> = {
-  "empty": {
-    "press": (ctx) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording",
-  },
-  "waiting-to-record": {
-    "ready-to-record": () => "recording",
-  },
-  "recording": {
-    "press": (ctx) => ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "recorded",
-  },
-  "waiting-to-end-recording": {
-    "ready-to-end-recording": () => "recorded",
-  },
-  "recorded": {
-    "press": (ctx) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing",
-  },
-  "waiting-to-play": {
-    "ready-to-play": (_) => "playing"
-  },
-  "playing": {
-    "press": (ctx) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "playing",
-    "loop-end": (_, looping) => looping ? "playing" : "recorded",
-  },
+type Rule = {
+  from: PadState | "*";
+  event: PadEvent;
+  when?: (args: RuleArgs) => boolean;
+  to: (args: RuleArgs) => PadState | PadStateDetails;
 };
 
 const HELD_STATES: PadState[] = ["recorded", "playing"];
 
-function getCrossCuttingTransition(
-  currentState: PadState,
-  event: PadEvent,
-  ctx: PadContext,
-  looping: boolean
-): PadStateDetails | null {
-  if (event === "double-press" && ctx.settings.loopable){
-    console.log("double press")
-    return { state: currentState, looping: !looping };
-  }
+const rules: Rule[] = [
+  {
+    from: "*", event: "double-press",
+    when: ({ ctx }) => ctx.settings.loopable,
+    to: ({ state, looping }) => ({ state, looping: !looping })
+  },
 
-  if (event === "held" && HELD_STATES.includes(currentState))
-    return { state: "empty", looping };
+  {
+    from: "*", event: "held",
+    when: ({ state }) => HELD_STATES.includes(state),
+    to: () => "empty"
+  },
 
-  return null;
-}
+  {
+    from: "empty", event: "press",
+    to: ({ ctx }) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording"
+  },
+
+  {
+    from: "waiting-to-record", event: "ready-to-record",
+    to: () => "recording"
+  },
+
+  {
+    from: "recording", event: "press",
+    to: ({ ctx }) => ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "processing-recording"
+  },
+
+  {
+    from: "waiting-to-end-recording", event: "ready-to-end-recording",
+    to: () => "processing-recording"
+  },
+
+  {
+    from: "processing-recording", event: "processing-recording-complete",
+    to: () => "recorded"
+  },
+
+  {
+    from: "recorded", event: "press",
+    to: ({ ctx }) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing"
+  },
+
+  {
+    from: "waiting-to-play", event: "ready-to-play",
+    to: () => "playing"
+  },
+
+  {
+    from: "playing", event: "press",
+    to: ({ ctx }) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "playing"
+  },
+
+  {
+    from: "playing", event: "loop-end",
+    to: ({ looping }) => looping ? "playing" : "recorded"
+  },
+];
 
 function getNextStateDetails(
-  currentState: PadState,
+  state: PadState,
   event: PadEvent,
   ctx: PadContext,
-  looping: boolean
+  looping: boolean,
 ): PadStateDetails {
-  if (ctx.settingsPressed && ["press", "double-press", "held"].includes(event))
-    return { state: currentState, looping };
 
-  const crossCutting = getCrossCuttingTransition(currentState, event, ctx, looping);
-  if (crossCutting) {
-    return { state: crossCutting.state, looping: crossCutting.looping };
-  }
+  const args: RuleArgs = { ctx, state, looping };
+  const rule = rules.find(r =>
+    (r.from === "*" || r.from === state) &&
+    r.event === event &&
+    (!r.when || r.when(args))
+  );
 
-  const nextState = table[currentState]?.[event]?.(ctx, looping) ?? currentState;
-  const nextLooping = nextState === "empty" ? false : looping;
-
-  return { state: nextState, looping: nextLooping };
+  const next = rule?.to(args) ?? state;
+  const details: PadStateDetails = typeof next === "string" ? { state: next, looping } : next;
+  return { state: details.state, looping: details.state === "empty" ? false : details.looping };
 }
 
 export class PadStateMachine {
