@@ -6,13 +6,19 @@ const CLICK_PEAK_GAIN = 0.3;
 
 export class Metronome {
   private bpm: number;
-  private startTime: number | null = null;
+  private beatsPerBar: number;
+  private _startTime: number | null = null;
   private nextBeatIndex = 0;
   private schedulerTimerId = -1;
   private _isRunning = false;
 
-  constructor(private readonly audioContext: AudioContext, bpm = 120) {
+  constructor(
+    private readonly audioContext: AudioContext,
+    bpm = 120,
+    beatsPerBar = 4,
+  ) {
     this.bpm = bpm;
+    this.beatsPerBar = beatsPerBar;
   }
 
   public get isRunning(): boolean {
@@ -23,10 +29,22 @@ export class Metronome {
     return this.bpm;
   }
 
+  public get currentBeatsPerBar(): number {
+    return this.beatsPerBar;
+  }
+
+  public get startTime(): number | null {
+    return this._startTime;
+  }
+
+  public get barDurationSec(): number {
+    return (60 / this.bpm) * this.beatsPerBar;
+  }
+
   public start() {
     if (this._isRunning) return;
     this.audioContext.resume();
-    this.startTime = this.audioContext.currentTime;
+    this._startTime = this.audioContext.currentTime;
     this.nextBeatIndex = 0;
     this._isRunning = true;
     this.tick();
@@ -34,7 +52,7 @@ export class Metronome {
 
   public stop() {
     this._isRunning = false;
-    this.startTime = null;
+    this._startTime = null;
     if (this.schedulerTimerId !== -1) {
       clearTimeout(this.schedulerTimerId);
       this.schedulerTimerId = -1;
@@ -44,27 +62,36 @@ export class Metronome {
   public setBpm(bpm: number) {
     if (bpm <= 0 || !Number.isFinite(bpm)) return;
     this.bpm = bpm;
-    if (this._isRunning) {
-      this.stop();
-      this.start();
-    }
+    this.restartIfRunning();
+  }
+
+  public setBeatsPerBar(n: number) {
+    if (n <= 0 || !Number.isFinite(n) || !Number.isInteger(n)) return;
+    this.beatsPerBar = n;
+    this.restartIfRunning();
+  }
+
+  private restartIfRunning() {
+    if (!this._isRunning) return;
+    this.stop();
+    this.start();
   }
 
   public getNearestLoopBoundary(): number | null {
-    if (!this._isRunning || this.startTime === null) return null;
-    const beatSec = 60 / this.bpm;
-    const elapsed = this.audioContext.currentTime - this.startTime;
-    const beatIndex = Math.round(elapsed / beatSec);
-    return this.startTime + beatIndex * beatSec;
+    if (!this._isRunning || this._startTime === null) return null;
+    const barSec = this.barDurationSec;
+    const elapsed = this.audioContext.currentTime - this._startTime;
+    const barIndex = Math.round(elapsed / barSec);
+    return this._startTime + barIndex * barSec;
   }
 
   private tick = () => {
-    if (!this._isRunning || this.startTime === null) return;
+    if (!this._isRunning || this._startTime === null) return;
     const beatSec = 60 / this.bpm;
     const horizon = this.audioContext.currentTime + SCHEDULE_AHEAD_SEC;
 
     while (true) {
-      const beatTime = this.startTime + this.nextBeatIndex * beatSec;
+      const beatTime = this._startTime + this.nextBeatIndex * beatSec;
       if (beatTime >= horizon) break;
       this.playClick(beatTime);
       this.nextBeatIndex++;

@@ -6,6 +6,7 @@
     <title>Loop Pad</title>
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./src/pad/pad.css" />
+    <link rel="stylesheet" href="./src/metronome/metronome.css" />
     <script type="importmap">
       {
         "imports": {
@@ -28,12 +29,7 @@
       <div id="pad9"></div>
     </div>
 
-    <div id="metronome-controls" style="max-width: 480px; margin: 12px auto; display: flex; gap: 8px; align-items: center;">
-      <button id="metronome-toggle">Start</button>
-      <label>BPM
-        <input type="number" id="metronome-bpm" value="120" min="20" max="300" step="1">
-      </label>
-    </div>
+    <div id="metronome" class="metronome"></div>
 
     <button id="settings-button">SETTINGS</button>
     <dialog id="pad-settings-dialog">
