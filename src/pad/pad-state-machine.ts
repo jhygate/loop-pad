@@ -55,7 +55,7 @@ const rules: Rule[] = [
 
   {
     from: "empty", event: "press",
-    to: ({ ctx }) => ctx.syncStartDecision === "wait" ? "waiting-to-record" : "recording"
+    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-record" : "recording"
   },
 
   {
@@ -65,7 +65,7 @@ const rules: Rule[] = [
 
   {
     from: "recording", event: "press",
-    to: ({ ctx }) => ctx.syncEndDecision === "wait" ? "waiting-to-end-recording" : "processing-recording"
+    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-end-recording" : "processing-recording"
   },
 
   {
@@ -80,7 +80,7 @@ const rules: Rule[] = [
 
   {
     from: "recorded", event: "press",
-    to: ({ ctx }) => ctx.playSyncDecision === "wait" ? "waiting-to-play" : "playing"
+    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-play" : "playing"
   },
 
   {
@@ -139,7 +139,5 @@ export class PadStateMachine {
     const next = getNextStateDetails(this.state, event, ctx, this._looping);
     this.state = next.state;
     this._looping = next.looping;
-
-    console.log(this.state);
   }
 }

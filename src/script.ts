@@ -4,7 +4,13 @@ import { getStream } from "@/audio-helpers.js";
 import { Metronome } from "@/metronome/metronome.js";
 import { MetronomeView } from "@/metronome/metronome-view.js";
 
-class main {
+declare global {
+  interface Window {
+    app: App;
+  }
+}
+
+class App {
   pads: Record<number, Pad> = {};
   settingsModal: SettingsModal;
   metronome: Metronome;
@@ -30,5 +36,5 @@ class main {
   }
 }
 
-(window as any).app = new main();
-(window as any).app.init();
+window.app = new App();
+window.app.init();
