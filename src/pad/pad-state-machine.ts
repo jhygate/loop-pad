@@ -47,7 +47,6 @@ const rules: Rule[] = [
     when: ({ ctx }) => ctx.settings.loopable,
     to: ({ state, looping }) => ({ state, looping: !looping })
   },
-
   {
     from: "*", event: "held",
     when: ({ state }) => HELD_STATES.includes(state),
@@ -56,7 +55,7 @@ const rules: Rule[] = [
 
   {
     from: "empty", event: "press",
-    to: ({ ctx }) => ctx.settings.recordSyncStart ? "waiting-to-record" : "recording"
+    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-record" : "recording"
   },
 
   {
@@ -66,7 +65,7 @@ const rules: Rule[] = [
 
   {
     from: "recording", event: "press",
-    to: ({ ctx }) => ctx.settings.recordSyncEnd ? "waiting-to-end-recording" : "processing-recording"
+    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-end-recording" : "processing-recording"
   },
 
   {
@@ -81,7 +80,7 @@ const rules: Rule[] = [
 
   {
     from: "recorded", event: "press",
-    to: ({ ctx }) => ctx.settings.playSyncStart ? "waiting-to-play" : "playing"
+    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-play" : "playing"
   },
 
   {
@@ -91,6 +90,11 @@ const rules: Rule[] = [
 
   {
     from: "playing", event: "press",
+    to: ({ ctx }) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "playing"
+  },
+  {
+    from: "playing", event: "double-press",
+    when: ({ ctx }) => !ctx.settings.loopable,
     to: ({ ctx }) => ctx.settings.playingPressBehavior === "stop" ? "recorded" : "playing"
   },
 
@@ -135,7 +139,5 @@ export class PadStateMachine {
     const next = getNextStateDetails(this.state, event, ctx, this._looping);
     this.state = next.state;
     this._looping = next.looping;
-
-    console.log(this.state);
   }
 }

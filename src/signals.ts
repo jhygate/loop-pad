@@ -1,7 +1,9 @@
-let subscriber: Function | null = null
+type Subscriber = () => void
+
+let subscriber: Subscriber | null = null
 
 export function signal<T>(defaultValue: T) {
-  const subscribers = new Set<Function>()
+  const subscribers = new Set<Subscriber>()
   let value = defaultValue
 
   return {
@@ -18,19 +20,15 @@ export function signal<T>(defaultValue: T) {
   }
 }
 
-export function effect(fn: Function) {
-  subscriber = fn
-  fn()
-  subscriber = null
-}
-
-export function derived(fn: Function) {
-  const derived = signal(fn())
-  effect(
-    () => {
-      derived.value = fn()
+export function effect(fn: () => void) {
+  const run = () => {
+    const previous = subscriber
+    subscriber = run
+    try {
+      fn()
+    } finally {
+      subscriber = previous
     }
-  )
-  return derived
+  }
+  run()
 }
-

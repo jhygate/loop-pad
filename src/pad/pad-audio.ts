@@ -1,6 +1,6 @@
 import { PadState, ControllerPadEvent } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
-import { trimBuffer, computeMaxGain, type TrimOptions } from "@/audio-helpers.js";
+import { trimBuffer, computeMaxGain, adjustRecording, type TrimOptions, type RecordingAdjustment } from "@/audio-helpers.js";
 
 export class PadAudioHandler {
   private readonly mediaRecorder: MediaRecorder;
@@ -13,6 +13,8 @@ export class PadAudioHandler {
   private sourceNode: AudioBufferSourceNode | null = null;
   private playStartTime: number | null = null;
   private _maxGain = 1;
+  private pendingRecordingAdjustment: RecordingAdjustment = { prependMs: 0, appendMs: 0, trimEndMs: 0 };
+  private pendingPlaybackOffsetMs = 0;
 
   constructor(
     stream: MediaStream,
@@ -96,7 +98,9 @@ export class PadAudioHandler {
       const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
       const arrayBuffer = await blob.arrayBuffer();
       const buffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      this.audioBuffer = trimBuffer(buffer, this.audioContext, this.trimOptions());
+      const trimmed = trimBuffer(buffer, this.audioContext, this.trimOptions());
+      this.audioBuffer = adjustRecording(trimmed, this.audioContext, this.pendingRecordingAdjustment);
+      this.pendingRecordingAdjustment = { prependMs: 0, appendMs: 0, trimEndMs: 0 };
       this._maxGain = computeMaxGain(this.audioBuffer);
     } catch (e) {
       console.error("recording decode failed", e);
@@ -112,11 +116,14 @@ export class PadAudioHandler {
 
     this.stopSource();
 
+    const offsetSec = Math.min(this.pendingPlaybackOffsetMs / 1000, this.audioBuffer.duration);
+    this.pendingPlaybackOffsetMs = 0;
+
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
     this.sourceNode.connect(this.gainNode);
-    this.sourceNode.start();
-    this.playStartTime = this.audioContext.currentTime;
+    this.sourceNode.start(0, offsetSec);
+    this.playStartTime = this.audioContext.currentTime - offsetSec;
 
     this.sourceNode.onended = () => {
       this.onControllerEvent('loop-end');
@@ -168,5 +175,26 @@ export class PadAudioHandler {
 
   public get maxGain(): number {
     return this._maxGain;
+  }
+
+  public now(): number {
+    return this.audioContext.currentTime;
+  }
+
+  public nearestBoundary(): number | null {
+    if (this.playStartTime === null || !this.audioBuffer) return null;
+    const duration = this.audioBuffer.duration;
+    if (duration <= 0) return null;
+    const elapsed = this.audioContext.currentTime - this.playStartTime;
+    const loopIndex = Math.round(elapsed / duration);
+    return this.playStartTime + loopIndex * duration;
+  }
+
+  public setRecordingAdjustment(adjustment: RecordingAdjustment) {
+    this.pendingRecordingAdjustment = adjustment;
+  }
+
+  public setPlaybackOffsetMs(ms: number) {
+    this.pendingPlaybackOffsetMs = ms;
   }
 }

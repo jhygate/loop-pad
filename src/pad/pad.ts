@@ -3,19 +3,30 @@ import {
   PadState,
   PadEvent,
   UserPadEvent,
+  ControllerPadEvent,
 } from "@/pad/pad-state-machine.js";
 import { settingsPressed, selectedPad } from "@/settings/settings-modal.js";
 import { effect, signal } from "@/signals.js";
 import { PadViewHandler } from "@/pad/pad-view.js";
 import { PadAudioHandler } from "@/pad/pad-audio.js";
 import { PadUserInputHandler } from "@/pad/pad-user-input.js";
+import {
+  PadSyncPlanner,
+  type LoopBoundarySource,
+  type SyncDecision,
+  type SyncEffects,
+} from "@/pad/pad-sync.js";
+import type { Metronome } from "@/metronome/metronome.js";
 
 
 export type PadSettings = {
   recordSyncStart: boolean;
+  recordSyncStartThresholdMs: number;
   recordSyncEnd: boolean;
+  recordSyncEndThresholdMs: number;
   playingPressBehavior: "stop" | "restart";
   playSyncStart: boolean;
+  playSyncStartThresholdMs: number;
   loopable: boolean;
   audioThreshold: number;
   thresholdStart: boolean;
@@ -35,14 +46,18 @@ export const RECORDING_STATES: PadState[] = [
 export type PadContext = {
   settingsPressed: boolean;
   settings: PadSettings;
+  syncDecision: SyncDecision;
 };
 
 
 
 const DEFAULT_SETTINGS: PadSettings = {
   recordSyncStart: false,
+  recordSyncStartThresholdMs: 150,
   recordSyncEnd: false,
+  recordSyncEndThresholdMs: 150,
   playSyncStart: false,
+  playSyncStartThresholdMs: 150,
   playingPressBehavior: "stop",
   loopable: true,
   audioThreshold: 0,
@@ -60,8 +75,16 @@ export class Pad {
   private readonly viewHandler: PadViewHandler;
   private readonly audioHandler: PadAudioHandler;
   private readonly inputHandler: PadUserInputHandler;
+  private readonly syncPlanner: PadSyncPlanner;
+
+  private readonly syncEffects: SyncEffects = {
+    scheduleReady: (event, delayMs) => this.scheduleReady(event, delayMs),
+    adjustRecording: (adjustment) => this.audioHandler.setRecordingAdjustment(adjustment),
+    offsetPlayback: (offsetMs) => this.audioHandler.setPlaybackOffsetMs(offsetMs),
+  };
 
   private settings: PadSettings = { ...DEFAULT_SETTINGS };
+  private pendingSyncTimerId = -1;
 
   public readonly stateSignal = signal<PadState>("empty");
 
@@ -70,6 +93,7 @@ export class Pad {
     stream: MediaStream,
     audioContext: AudioContext,
     private readonly peers: Record<number, Pad>,
+    private readonly metronome: Metronome | null,
   ) {
     this.id = id;
     this.htmlElement = document.getElementById(`pad${id}`);
@@ -86,6 +110,12 @@ export class Pad {
       this.htmlElement,
       (gesture) => this.handleGesture(gesture),
       () => this.render(),
+    );
+
+    this.syncPlanner = new PadSyncPlanner(
+      () => this.settings,
+      () => this.audioHandler.now(),
+      () => this.boundarySources(),
     );
 
     effect(() => this.render());
@@ -129,18 +159,49 @@ export class Pad {
   }
 
   private transitionState(event: PadEvent) {
+    const plan = this.syncPlanner.planFor(this.state, event);
+
     const padContext: PadContext = {
       settingsPressed: settingsPressed.value,
       settings: this.settings,
+      syncDecision: plan.decision,
     };
 
     this.stateMachine.transition(event, padContext);
-    this.stateSignal.value = this.stateMachine.state;
+    this.stateSignal.value = this.state;
+
+    this.clearPendingSyncTimer();
+    plan.apply(this.syncEffects);
 
     if (event !== "double-press") {
       this.audioHandler.handleStateChange(this.state);
     }
     this.render();
+  }
+
+  private scheduleReady(event: ControllerPadEvent, delayMs: number) {
+    this.pendingSyncTimerId = setTimeout(() => {
+      this.pendingSyncTimerId = -1;
+      this.transitionState(event);
+    }, Math.max(0, delayMs));
+  }
+
+  private clearPendingSyncTimer() {
+    if (this.pendingSyncTimerId !== -1) {
+      clearTimeout(this.pendingSyncTimerId);
+      this.pendingSyncTimerId = -1;
+    }
+  }
+
+  private boundarySources(): LoopBoundarySource[] {
+    const sources: LoopBoundarySource[] = Object.values(this.peers).filter(peer => peer !== this);
+    if (this.metronome) sources.push(this.metronome);
+    return sources;
+  }
+
+  public getNearestLoopBoundary(): number | null {
+    if (this.state !== "playing" || !this.looping) return null;
+    return this.audioHandler.nearestBoundary();
   }
 
   public render() {
