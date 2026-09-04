@@ -41,6 +41,7 @@ src/
     pad.ts                # Pad class (orchestrator)
     pad-state-machine.ts  # FSM — pure state logic
     pad-audio.ts          # Recording + playback
+    pad-sync.ts           # Loop-boundary sync planning
     pad-view.ts           # UI rendering
     pad-user-input.ts     # Pointer gestures
     pad-constants.ts      # Timing constants

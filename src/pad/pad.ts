@@ -10,6 +10,12 @@ import { effect, signal } from "@/signals.js";
 import { PadViewHandler } from "@/pad/pad-view.js";
 import { PadAudioHandler } from "@/pad/pad-audio.js";
 import { PadUserInputHandler } from "@/pad/pad-user-input.js";
+import {
+  PadSyncPlanner,
+  type LoopBoundarySource,
+  type SyncDecision,
+  type SyncEffects,
+} from "@/pad/pad-sync.js";
 import type { Metronome } from "@/metronome/metronome.js";
 
 
@@ -30,22 +36,6 @@ export type PadSettings = {
   recordSources: number[];
 }
 
-export type SyncDecision = "immediate" | "wait";
-
-type RecordSyncPlan = {
-  decision: SyncDecision;
-  waitMs: number;
-  prependMs: number;
-  appendMs: number;
-  trimEndMs: number;
-};
-
-type PlaySyncPlan = {
-  decision: SyncDecision;
-  waitMs: number;
-  offsetMs: number;
-};
-
 export const RECORDING_STATES: PadState[] = [
   "waiting-to-record",
   "recording",
@@ -56,9 +46,7 @@ export const RECORDING_STATES: PadState[] = [
 export type PadContext = {
   settingsPressed: boolean;
   settings: PadSettings;
-  syncStartDecision: SyncDecision;
-  syncEndDecision: SyncDecision;
-  playSyncDecision: SyncDecision;
+  syncDecision: SyncDecision;
 };
 
 
@@ -87,6 +75,13 @@ export class Pad {
   private readonly viewHandler: PadViewHandler;
   private readonly audioHandler: PadAudioHandler;
   private readonly inputHandler: PadUserInputHandler;
+  private readonly syncPlanner: PadSyncPlanner;
+
+  private readonly syncEffects: SyncEffects = {
+    scheduleReady: (event, delayMs) => this.scheduleReady(event, delayMs),
+    adjustRecording: (adjustment) => this.audioHandler.setRecordingAdjustment(adjustment),
+    offsetPlayback: (offsetMs) => this.audioHandler.setPlaybackOffsetMs(offsetMs),
+  };
 
   private settings: PadSettings = { ...DEFAULT_SETTINGS };
   private pendingSyncTimerId = -1;
@@ -115,6 +110,12 @@ export class Pad {
       this.htmlElement,
       (gesture) => this.handleGesture(gesture),
       () => this.render(),
+    );
+
+    this.syncPlanner = new PadSyncPlanner(
+      () => this.settings,
+      () => this.audioHandler.now(),
+      () => this.boundarySources(),
     );
 
     effect(() => this.render());
@@ -158,65 +159,24 @@ export class Pad {
   }
 
   private transitionState(event: PadEvent) {
-    const startPlan = this.planRecordSyncStart();
-    const endPlan = this.planRecordSyncEnd();
-    const playPlan = this.planPlaySyncStart();
+    const plan = this.syncPlanner.planFor(this.state, event);
 
     const padContext: PadContext = {
       settingsPressed: settingsPressed.value,
       settings: this.settings,
-      syncStartDecision: startPlan.decision,
-      syncEndDecision: endPlan.decision,
-      playSyncDecision: playPlan.decision,
+      syncDecision: plan.decision,
     };
 
-    const prevState = this.state;
     this.stateMachine.transition(event, padContext);
-    const nextState = this.state;
-    this.stateSignal.value = nextState;
+    this.stateSignal.value = this.state;
 
     this.clearPendingSyncTimer();
-    this.applySyncSideEffects(prevState, nextState, startPlan, endPlan, playPlan);
+    plan.apply(this.syncEffects);
 
     if (event !== "double-press") {
-      this.audioHandler.handleStateChange(nextState);
+      this.audioHandler.handleStateChange(this.state);
     }
     this.render();
-  }
-
-  private applySyncSideEffects(
-    prevState: PadState,
-    nextState: PadState,
-    startPlan: RecordSyncPlan,
-    endPlan: RecordSyncPlan,
-    playPlan: PlaySyncPlan,
-  ) {
-    if (prevState === "empty" && nextState === "waiting-to-record") {
-      this.scheduleReady("ready-to-record", startPlan.waitMs);
-    }
-    if (prevState === "empty" && nextState === "recording") {
-      this.audioHandler.setRecordingAdjustment({
-        prependMs: startPlan.prependMs,
-        appendMs: 0,
-        trimEndMs: 0,
-      });
-    }
-    if (prevState === "recording" && nextState === "waiting-to-end-recording") {
-      this.scheduleReady("ready-to-end-recording", endPlan.waitMs);
-    }
-    if (prevState === "recording" && nextState === "processing-recording") {
-      this.audioHandler.setRecordingAdjustment({
-        prependMs: 0,
-        appendMs: endPlan.appendMs,
-        trimEndMs: endPlan.trimEndMs,
-      });
-    }
-    if (prevState === "recorded" && nextState === "waiting-to-play") {
-      this.scheduleReady("ready-to-play", playPlan.waitMs);
-    }
-    if (prevState === "recorded" && nextState === "playing") {
-      this.audioHandler.setPlaybackOffsetMs(playPlan.offsetMs);
-    }
   }
 
   private scheduleReady(event: ControllerPadEvent, delayMs: number) {
@@ -233,63 +193,10 @@ export class Pad {
     }
   }
 
-  private planRecordSyncStart(): RecordSyncPlan {
-    const noop: RecordSyncPlan = { decision: "immediate", waitMs: 0, prependMs: 0, appendMs: 0, trimEndMs: 0 };
-    if (!this.settings.recordSyncStart) return noop;
-    const nearest = this.nearestPeerBoundary();
-    if (nearest === null) return noop;
-
-    const deltaMs = (nearest - this.audioHandler.now()) * 1000;
-    if (Math.abs(deltaMs) > this.settings.recordSyncStartThresholdMs) return noop;
-
-    return deltaMs > 0
-      ? { ...noop, decision: "wait", waitMs: deltaMs }
-      : { ...noop, prependMs: -deltaMs };
-  }
-
-  private planRecordSyncEnd(): RecordSyncPlan {
-    const noop: RecordSyncPlan = { decision: "immediate", waitMs: 0, prependMs: 0, appendMs: 0, trimEndMs: 0 };
-    if (!this.settings.recordSyncEnd) return noop;
-    const nearest = this.nearestPeerBoundary();
-    if (nearest === null) return noop;
-
-    const deltaMs = (nearest - this.audioHandler.now()) * 1000;
-    if (Math.abs(deltaMs) > this.settings.recordSyncEndThresholdMs) return noop;
-
-    return deltaMs > 0
-      ? { ...noop, appendMs: deltaMs }
-      : { ...noop, trimEndMs: -deltaMs };
-  }
-
-  private planPlaySyncStart(): PlaySyncPlan {
-    if (!this.settings.playSyncStart) return { decision: "immediate", waitMs: 0, offsetMs: 0 };
-    const nearest = this.nearestPeerBoundary();
-    if (nearest === null) return { decision: "immediate", waitMs: 0, offsetMs: 0 };
-
-    const deltaMs = (nearest - this.audioHandler.now()) * 1000;
-    if (Math.abs(deltaMs) > this.settings.playSyncStartThresholdMs) {
-      return { decision: "immediate", waitMs: 0, offsetMs: 0 };
-    }
-    return deltaMs > 0
-      ? { decision: "wait", waitMs: deltaMs, offsetMs: 0 }
-      : { decision: "immediate", waitMs: 0, offsetMs: -deltaMs };
-  }
-
-  private nearestPeerBoundary(): number | null {
-    const now = this.audioHandler.now();
-    let nearest: number | null = null;
-    const consider = (b: number | null) => {
-      if (b === null) return;
-      if (nearest === null || Math.abs(b - now) < Math.abs(nearest - now)) {
-        nearest = b;
-      }
-    };
-    for (const peer of Object.values(this.peers)) {
-      if (peer === this) continue;
-      consider(peer.getNearestLoopBoundary());
-    }
-    if (this.metronome) consider(this.metronome.getNearestLoopBoundary());
-    return nearest;
+  private boundarySources(): LoopBoundarySource[] {
+    const sources: LoopBoundarySource[] = Object.values(this.peers).filter(peer => peer !== this);
+    if (this.metronome) sources.push(this.metronome);
+    return sources;
   }
 
   public getNearestLoopBoundary(): number | null {
