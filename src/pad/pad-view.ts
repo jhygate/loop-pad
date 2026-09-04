@@ -18,6 +18,8 @@ const STATEMAPPING: Record<PadState, { icon: string; className?: string }> = {
   "playing": { icon: pauseIcon },
 };
 
+const ICON_CLASSES = ["pulse", "greyed"];
+
 export type PadViewProps = {
   padNumber: number;
   state: PadState;
@@ -29,48 +31,93 @@ export type PadViewProps = {
   audioPlayed: number | null;
 };
 
-function getFilledTemplate({
-  padNumber,
-  state,
-  looping,
-  settingsPressed,
-  holdStartTime,
-  settings,
-  audioLength,
-  audioPlayed,
-}: PadViewProps) {
-  const { icon, className = "" } = STATEMAPPING[state];
-
-  const deleteBar = holdStartTime === null || state === "empty" ? "" : `
-    <div class="delete-bar" style="animation-delay: ${HOLD_GRACE_TIME - (performance.now() - holdStartTime)}ms; animation-duration: ${HOLD_TO_DELETE_TIME - HOLD_GRACE_TIME}ms;"></div>`;
-
-  const padLooping = !settings.loopable ? "" : `
-    <div class="pad-looping" style="color: ${looping ? "black" : "lightgrey"};">${loopIcon}</div>`;
-
-  const padProgress = audioLength === null || audioPlayed === null ? `<div class="pad-progress"></div>` : `
-    <div class="pad-progress" style="--start: ${100 * audioPlayed / audioLength}%; animation: progressFill ${audioLength - audioPlayed}s linear forwards;"></div>`;
-
-  return `
-    <div class="pad-container">
-      ${deleteBar}
-      <div class="pad-header">
-        <div class="pad-number">${padNumber}</div>
-        ${padLooping}
-      </div>
-      <div class="pad-icon ${className}">${settingsPressed ? "settings" : icon}</div>
-      ${padProgress}
-    </div>
-  `;
-}
-
 export class PadViewHandler {
-  private htmlElement: HTMLElement;
+  private readonly numberElement: HTMLElement;
+  private readonly loopingElement: HTMLElement;
+  private readonly iconElement: HTMLElement;
+  private readonly deleteBarElement: HTMLElement;
+  private readonly progressElement: HTMLElement;
+
+  private renderedIcon = "";
+  private deleteBarVisible = false;
+  private lastAudioPlayed: number | null = null;
 
   constructor(htmlElement: HTMLElement) {
-    this.htmlElement = htmlElement;
+    htmlElement.innerHTML = `
+      <div class="pad-container">
+        <div class="delete-bar" data-role="delete-bar" hidden></div>
+        <div class="pad-header">
+          <div class="pad-number" data-role="number"></div>
+          <div class="pad-looping" data-role="looping">${loopIcon}</div>
+        </div>
+        <div class="pad-icon" data-role="icon"></div>
+        <div class="pad-progress" data-role="progress"></div>
+      </div>
+    `;
+
+    this.numberElement = htmlElement.querySelector<HTMLElement>('[data-role="number"]');
+    this.loopingElement = htmlElement.querySelector<HTMLElement>('[data-role="looping"]');
+    this.iconElement = htmlElement.querySelector<HTMLElement>('[data-role="icon"]');
+    this.deleteBarElement = htmlElement.querySelector<HTMLElement>('[data-role="delete-bar"]');
+    this.progressElement = htmlElement.querySelector<HTMLElement>('[data-role="progress"]');
   }
 
   public render(props: PadViewProps) {
-    this.htmlElement.innerHTML = getFilledTemplate(props);
+    this.numberElement.textContent = String(props.padNumber);
+    this.renderIcon(props.state, props.settingsPressed);
+    this.renderLooping(props.looping, props.settings.loopable);
+    this.renderDeleteBar(props.holdStartTime, props.state);
+    this.renderProgress(props.audioLength, props.audioPlayed);
+  }
+
+  private renderIcon(state: PadState, settingsPressed: boolean) {
+    const { icon, className } = STATEMAPPING[state];
+    const content = settingsPressed ? "settings" : icon;
+
+    if (content !== this.renderedIcon) {
+      this.iconElement.innerHTML = content;
+      this.renderedIcon = content;
+    }
+    for (const candidate of ICON_CLASSES) {
+      this.iconElement.classList.toggle(candidate, candidate === className);
+    }
+  }
+
+  private renderLooping(looping: boolean, loopable: boolean) {
+    this.loopingElement.hidden = !loopable;
+    this.loopingElement.style.color = looping ? "black" : "lightgrey";
+  }
+
+  private renderDeleteBar(holdStartTime: number | null, state: PadState) {
+    const visible = holdStartTime !== null && state !== "empty";
+    if (visible === this.deleteBarVisible) return;
+    this.deleteBarVisible = visible;
+
+    if (!visible) {
+      this.deleteBarElement.hidden = true;
+      return;
+    }
+
+    const elapsed = performance.now() - holdStartTime;
+    this.deleteBarElement.style.animationDelay = `${HOLD_GRACE_TIME - elapsed}ms`;
+    this.deleteBarElement.style.animationDuration = `${HOLD_TO_DELETE_TIME - HOLD_GRACE_TIME}ms`;
+    this.deleteBarElement.hidden = false;
+  }
+
+  private renderProgress(audioLength: number | null, audioPlayed: number | null) {
+    if (audioLength === null || audioPlayed === null) {
+      if (this.lastAudioPlayed !== null) this.progressElement.style.animation = "";
+      this.lastAudioPlayed = null;
+      return;
+    }
+
+    const restarted = this.lastAudioPlayed === null || audioPlayed < this.lastAudioPlayed;
+    this.lastAudioPlayed = audioPlayed;
+    if (!restarted) return;
+
+    this.progressElement.style.setProperty("--start", `${100 * audioPlayed / audioLength}%`);
+    this.progressElement.style.animation = "none";
+    void this.progressElement.offsetHeight;
+    this.progressElement.style.animation = `progressFill ${audioLength - audioPlayed}s linear forwards`;
   }
 }
