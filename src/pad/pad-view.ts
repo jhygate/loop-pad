@@ -1,7 +1,3 @@
-//Needs access to settings (displaying settings info perhaps?)
-// needs acces to FSM - looping/display
-// needs access to audfio object for animations.
-
 import { PadState } from "@/pad/pad-state-machine.js";
 import { PadSettings } from "@/pad/pad.js";
 import { HOLD_TO_DELETE_TIME, HOLD_GRACE_TIME } from "@/pad/pad-constants.js";

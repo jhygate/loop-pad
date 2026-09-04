@@ -139,7 +139,5 @@ export class PadStateMachine {
     const next = getNextStateDetails(this.state, event, ctx, this._looping);
     this.state = next.state;
     this._looping = next.looping;
-
-    console.log(this.state);
   }
 }
