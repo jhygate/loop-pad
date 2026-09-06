@@ -2,6 +2,7 @@ import { Metronome } from "@/metronome/metronome.js";
 import { settingsPressed } from "@/settings/settings-modal.js";
 import { effect } from "@/signals.js";
 import { playIcon, pauseIcon } from "@/pad/pad-view.js";
+import { saveMetronome } from "@/persistence.js";
 
 export class MetronomeView {
   private readonly dialog: HTMLDialogElement;
@@ -70,6 +71,7 @@ export class MetronomeView {
       if (Number.isInteger(beatsPerBar) && beatsPerBar >= 1 && beatsPerBar <= 16) {
         this.metronome.setBeatsPerBar(beatsPerBar);
       }
+      saveMetronome({ bpm: this.metronome.currentBpm, beatsPerBar: this.metronome.currentBeatsPerBar });
       this.render();
     });
   }

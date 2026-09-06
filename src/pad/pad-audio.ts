@@ -230,6 +230,15 @@ export class PadAudioHandler {
     };
   }
 
+  public get buffer(): AudioBuffer | null {
+    return this.audioBuffer;
+  }
+
+  public setBuffer(buffer: AudioBuffer) {
+    this.audioBuffer = buffer;
+    this._maxGain = computeMaxGain(buffer);
+  }
+
   public get recordingDuration(): number | null {
     return this.audioBuffer?.duration ?? null;
   }

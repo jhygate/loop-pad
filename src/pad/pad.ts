@@ -18,6 +18,7 @@ import {
   type SyncEffects,
 } from "@/pad/pad-sync.js";
 import type { Metronome } from "@/metronome/metronome.js";
+import { savePadState, saveRecording } from "@/persistence.js";
 
 
 export type PadSettings = {
@@ -145,7 +146,22 @@ export class Pad {
     this.audioHandler.setLooping(this.looping);
     this.audioHandler.setVolume(updated.volume);
     this.audioHandler.prepareInputDevice(updated.inputDeviceId);
+    this.persistState();
     this.render();
+  }
+
+  public restore(settings: PadSettings, looping: boolean, buffer: AudioBuffer | null) {
+    this.setSettings(settings);
+    if (!looping) this.stateMachine.disableLooping();
+    this.audioHandler.setLooping(this.looping);
+    if (buffer && this.state === "empty") {
+      this.audioHandler.setBuffer(buffer);
+      this.transitionState("recording-loaded");
+    }
+  }
+
+  private persistState() {
+    savePadState(this.id, { settings: this.settings, looping: this.looping });
   }
 
   public get maxVolume(): number {
@@ -171,6 +187,7 @@ export class Pad {
     };
 
     const prevState = this.state;
+    const prevLooping = this.looping;
     this.stateMachine.transition(event, padContext);
     this.stateSignal.value = this.state;
     this.audioHandler.setLooping(this.looping);
@@ -181,6 +198,15 @@ export class Pad {
     if (event !== "double-press") {
       this.audioHandler.handleStateChange(this.state);
     }
+
+    if (prevState === "processing-recording" && this.state === "recorded") {
+      void saveRecording(this.id, this.audioHandler.buffer);
+    }
+    if (this.state === "empty" && prevState !== "empty") {
+      void saveRecording(this.id, null);
+    }
+    if (this.looping !== prevLooping) this.persistState();
+
     this.render();
   }
 

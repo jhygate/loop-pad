@@ -27,6 +27,7 @@ export type ControllerPadEvent =
   | "ready-to-play"
   | "processing-recording-complete"
   | "recording-cancelled"
+  | "recording-loaded"
 
 export type PadEvent = UserPadEvent | ControllerPadEvent
 
@@ -82,6 +83,11 @@ const rules: Rule[] = [
   {
     from: "processing-recording", event: "recording-cancelled",
     to: () => "empty"
+  },
+
+  {
+    from: "empty", event: "recording-loaded",
+    to: () => "recorded"
   },
 
   {
