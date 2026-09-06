@@ -2,6 +2,12 @@
 
 A browser-based loop pad built with TypeScript.
 
+**Architecture:** [architecture.html](architecture.html) maps the modules, the pad state
+machine and what fires each transition, the roll-through capture pipeline, the timing grid,
+and the onset gate. Open it rendered at
+[localhost:8009/architecture.html](http://localhost:8009/architecture.html) while the dev
+server runs.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)

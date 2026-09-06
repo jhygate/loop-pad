@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loop Pad Internals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #faf8f4;
+    --ink: #201d18;
+    --muted: #6f6a60;
+    --line: #ddd8cc;
+    --panel: #f2efe7;
+    --press: #b34a1e;
+    --timer: #9a7b14;
+    --engine: #2e6e5e;
+    --gate: #79519b;
+    --store: #8a8474;
+    --slice: #2e6e5e22;
+    --display: "Fraunces", Georgia, serif;
+    --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16140f;
+      --ink: #e9e5da;
+      --muted: #9b9484;
+      --line: #37332a;
+      --panel: #1e1b15;
+      --press: #e58a55;
+      --timer: #d3ad4a;
+      --engine: #5cb59e;
+      --gate: #b58ad6;
+      --store: #8f897a;
+      --slice: #5cb59e26;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16140f;
+    --ink: #e9e5da;
+    --muted: #9b9484;
+    --line: #37332a;
+    --panel: #1e1b15;
+    --press: #e58a55;
+    --timer: #d3ad4a;
+    --engine: #5cb59e;
+    --gate: #b58ad6;
+    --store: #8f897a;
+    --slice: #5cb59e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 48px 24px 96px; }
+  .prose { max-width: 700px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 620;
+    font-size: clamp(34px, 5vw, 52px);
+    line-height: 1.05;
+    margin: 8px 0 16px;
+    text-wrap: balance;
+  }
+  h2 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 27px;
+    margin: 72px 0 8px;
+    text-wrap: balance;
+  }
+  h2 .no { color: var(--muted); font-family: var(--mono); font-size: 15px; margin-right: 10px; }
+  p { margin: 12px 0; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.05em 0.35em;
+  }
+  a { color: var(--press); }
+  figure { margin: 28px 0; }
+  .fig-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 18px 10px; }
+  .fig-scroll svg { display: block; min-width: 640px; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; max-width: 700px; }
+  svg text { font-family: var(--mono); }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px 22px;
+    font-family: var(--mono); font-size: 12.5px;
+    margin: 14px 0 4px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 22px; height: 0; border-top: 3px solid; border-radius: 2px; }
+  .swatch.dashed { border-top-style: dashed; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 20px 0; }
+  th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+  td code { white-space: nowrap; }
+  .steps { counter-reset: step; padding-left: 0; max-width: 700px; }
+  .steps li {
+    list-style: none; counter-increment: step; position: relative;
+    padding: 8px 0 8px 44px; border-bottom: 1px solid var(--line);
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    font-family: var(--mono); font-size: 13px; color: var(--press);
+    width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%;
+    display: grid; place-items: center; background: var(--panel);
+  }
+  .note {
+    border-left: 3px solid var(--press);
+    background: var(--panel);
+    padding: 12px 18px; margin: 22px 0; max-width: 700px;
+    border-radius: 0 8px 8px 0; font-size: 14.5px;
+  }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 13px; margin-top: 22px; }
+  .toc a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--line); }
+  .toc a:hover, .toc a:focus { color: var(--press); }
+  footer { margin-top: 80px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">loop-pad · fresh-build @ 572106c</div>
+    <h1>Loop Pad Internals</h1>
+    <p class="prose">Nine pads, one metronome, one browser. This page maps how a press becomes a loop that can never drift: the modules and their conversations, the state machine and who fires each event, the roll-through capture pipeline, the shared grid, and the sound-trigger gate.</p>
+    <nav class="toc">
+      <a href="#cast">1 · the cast</a>
+      <a href="#journey">2 · one press</a>
+      <a href="#fsm">3 · state machine</a>
+      <a href="#capture">4 · capture</a>
+      <a href="#grid">5 · the grid</a>
+      <a href="#gate">6 · the gate</a>
+    </nav>
+  </header>
+
+  <h2 id="cast"><span class="no">1</span>The cast</h2>
+  <p class="prose">Each <code>Pad</code> is an orchestrator that owns five collaborators and does almost no work itself. Decisions live in the planner, rules in the state machine, sound in the audio handler, pixels in the view. Arrows below are the actual method calls; dashed arrows are events flowing back.</p>
+
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 560" role="img" aria-label="Module map: Pad orchestrates input, state machine, planner, audio handler with its input gate, and view; the planner reads references from the metronome and playing pads; persistence mirrors state.">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g stroke="currentColor" fill="none" stroke-width="1.3">
+        <!-- boxes -->
+        <g fill="var(--bg)">
+          <rect x="40" y="140" width="200" height="54" rx="8"/>
+          <rect x="40" y="250" width="200" height="54" rx="8"/>
+          <rect x="40" y="380" width="200" height="68" rx="8"/>
+          <rect x="380" y="52" width="200" height="58" rx="8"/>
+          <rect x="380" y="240" width="200" height="70" rx="8" stroke-width="2.2"/>
+          <rect x="380" y="430" width="200" height="54" rx="8"/>
+          <rect x="700" y="80" width="220" height="58" rx="8"/>
+          <rect x="700" y="190" width="220" height="58" rx="8"/>
+          <rect x="700" y="300" width="220" height="58" rx="8"/>
+          <rect x="700" y="410" width="220" height="50" rx="8" stroke="var(--gate)"/>
+        </g>
+        <!-- arrows -->
+        <g marker-end="url(#a1)">
+          <line x1="240" y1="172" x2="376" y2="258" stroke="var(--press)"/>
+          <line x1="240" y1="277" x2="376" y2="277" />
+          <line x1="480" y1="240" x2="480" y2="114" />
+          <line x1="580" y1="252" x2="696" y2="116" />
+          <line x1="580" y1="268" x2="696" y2="219" />
+          <line x1="580" y1="292" x2="696" y2="322" />
+          <path d="M700 348 C 620 380 560 340 566 314" stroke="var(--engine)" stroke-dasharray="5 4"/>
+          <line x1="480" y1="310" x2="480" y2="426" />
+          <line x1="140" y1="380" x2="140" y2="308" stroke="var(--store)" stroke-dasharray="5 4"/>
+          <line x1="380" y1="292" x2="244" y2="386" stroke="var(--store)"/>
+          <line x1="790" y1="248" x2="592" y2="106" stroke-dasharray="5 4"/>
+          <line x1="785" y1="358" x2="785" y2="406" stroke="var(--gate)"/>
+          <path d="M835 410 C 850 390 850 378 838 362" stroke="var(--gate)" stroke-dasharray="5 4"/>
+        </g>
+      </g>
+      <!-- box labels -->
+      <g fill="currentColor" font-size="13" font-weight="500" text-anchor="middle">
+        <text x="140" y="163">PadUserInputHandler</text>
+        <text x="140" y="273">SettingsModal</text>
+        <text x="140" y="404">persistence.ts</text>
+        <text x="480" y="76">Metronome + playing pads</text>
+        <text x="480" y="271" font-size="15">Pad</text>
+        <text x="480" y="453">PadViewHandler</text>
+        <text x="810" y="104">PadStateMachine</text>
+        <text x="810" y="214">PadSyncPlanner</text>
+        <text x="810" y="324">PadAudioHandler</text>
+        <text x="810" y="431" fill="var(--gate)">InputGate</text>
+      </g>
+      <g fill="var(--muted)" font-size="11" text-anchor="middle">
+        <text x="140" y="181">pointer → gestures</text>
+        <text x="140" y="291">form → PadSettings</text>
+        <text x="140" y="422">localStorage · settings</text>
+        <text x="140" y="437">IndexedDB · recordings</text>
+        <text x="480" y="95">LoopReference sources</text>
+        <text x="480" y="292">orchestrator</text>
+        <text x="480" y="471">build once, mutate</text>
+        <text x="810" y="123">declarative rule table</text>
+        <text x="810" y="233">timing decisions</text>
+        <text x="810" y="343">record · slice · play</text>
+        <text x="810" y="448" fill="var(--gate)">onset sensor</text>
+      </g>
+      <!-- arrow labels -->
+      <g fill="var(--muted)" font-size="11">
+        <text x="252" y="212" fill="var(--press)">press · double · held</text>
+        <text x="252" y="266">setSettings()</text>
+        <text x="490" y="180" text-anchor="start">getLoopReference()</text>
+        <text x="596" y="160">transition(event, ctx)</text>
+        <text x="596" y="238">planFor(state, event)</text>
+        <text x="588" y="316">handleStateChange · effects</text>
+        <text x="588" y="386" fill="var(--engine)">controller events</text>
+        <text x="490" y="376" text-anchor="start">render(props)</text>
+        <text x="46" y="348" fill="var(--store)">restore() on load</text>
+        <text x="252" y="352" fill="var(--store)">save on change</text>
+        <text x="660" y="152">findReference() · metronome first</text>
+        <text x="738" y="392" fill="var(--gate)">arm / track</text>
+        <text x="858" y="392" fill="var(--gate)">onTrigger</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>The Pad's collaborators. Solid arrows are direct calls; dashed arrows are things flowing back — controller events from the audio side (<code>loop-end</code>, <code>input-detected</code>, <code>processing-recording-complete</code>, <code>recording-cancelled</code>), restore from storage at page load.</figcaption>
+  </figure>
+
+  <h2 id="journey"><span class="no">2</span>One press, one journey</h2>
+  <p class="prose">Every event — a finger, a timer, the audio engine, the gate — funnels through <code>Pad.transitionState(event)</code>, which always runs the same pipeline:</p>
+  <ol class="steps">
+    <li><strong>Plan.</strong> <code>planner.planFor(state, event)</code> returns a <code>SyncPlan</code>: a <em>decision</em> (<code>immediate</code> or <code>wait</code>) paired with the side effect that follows from it.</li>
+    <li><strong>Transition.</strong> The state machine picks the next state from its rule table, reading only the plan's decision and the settings.</li>
+    <li><strong>Propagate looping.</strong> <code>audioHandler.setLooping()</code> pushes the (possibly toggled) loop flag onto any live source.</li>
+    <li><strong>Apply the plan.</strong> The plan's <code>apply()</code> fires: open a capture window, schedule a boundary timer, schedule playback at an exact time.</li>
+    <li><strong>Act on the state.</strong> <code>handleStateChange(state)</code> maps state to sound: start the recorder, stop it, start/stop the gate, play, delete.</li>
+    <li><strong>Persist &amp; render.</strong> Finished takes mirror to IndexedDB, changed flags to localStorage; the view mutates only what changed.</li>
+  </ol>
+  <p class="prose">The load-bearing idea: <em>decisions are made once, up front, from timestamps</em> — then the audio work happens either at an exact scheduled time (playback) or once at the end (slicing). Nothing timing-critical rides on a JavaScript callback.</p>
+
+  <h2 id="fsm"><span class="no">3</span>The state machine</h2>
+  <p class="prose">Nine states, and every edge coloured by <em>who fires it</em>. Only clay edges are your finger; everything else is the machine keeping promises your finger made.</p>
+
+  <div class="legend">
+    <span><i class="swatch" style="border-color: var(--press)"></i>finger (press / held)</span>
+    <span><i class="swatch" style="border-color: var(--timer)"></i>boundary timer</span>
+    <span><i class="swatch" style="border-color: var(--engine)"></i>audio engine</span>
+    <span><i class="swatch" style="border-color: var(--gate)"></i>input gate</span>
+    <span><i class="swatch dashed" style="border-color: var(--store)"></i>persistence</span>
+  </div>
+
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 1180 560" role="img" aria-label="State machine: empty branches to armed, waiting-to-record or recording on press; armed reaches recording via input-detected; recording ends via press into waiting-to-end-recording or processing; processing completes to recorded or cancels to empty; recorded plays directly or via waiting-to-play; playing returns to recorded on press or loop-end.">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <!-- states -->
+      <g stroke="currentColor" fill="var(--bg)" stroke-width="1.4">
+        <rect x="30"  y="230" width="110" height="46" rx="23"/>
+        <rect x="215" y="120" width="120" height="46" rx="23" stroke="var(--gate)"/>
+        <rect x="200" y="330" width="150" height="46" rx="23"/>
+        <rect x="430" y="230" width="120" height="46" rx="23"/>
+        <rect x="560" y="360" width="160" height="46" rx="23"/>
+        <rect x="640" y="230" width="160" height="46" rx="23"/>
+        <rect x="900" y="230" width="120" height="46" rx="23" stroke-width="2.2"/>
+        <rect x="700" y="80"  width="140" height="46" rx="23"/>
+        <rect x="900" y="80"  width="120" height="46" rx="23" stroke-width="2.2"/>
+      </g>
+      <g fill="currentColor" font-size="13" text-anchor="middle">
+        <text x="85"   y="258">empty</text>
+        <text x="275"  y="148" fill="var(--gate)">armed</text>
+        <text x="275"  y="352">waiting-to-</text>
+        <text x="275"  y="366">record</text>
+        <text x="490"  y="258">recording</text>
+        <text x="640"  y="382">waiting-to-end</text>
+        <text x="720"  y="258">processing</text>
+        <text x="960"  y="258">recorded</text>
+        <text x="770"  y="108">waiting-to-play</text>
+        <text x="960"  y="108">playing</text>
+      </g>
+      <!-- edges -->
+      <g fill="none" stroke-width="1.5" marker-end="url(#a2)">
+        <!-- empty out -->
+        <path d="M120 230 C 150 190 175 165 211 147" stroke="var(--press)"/>
+        <path d="M120 276 C 150 310 165 330 196 348" stroke="var(--press)"/>
+        <line x1="140" y1="253" x2="426" y2="253" stroke="var(--press)"/>
+        <!-- armed -->
+        <path d="M335 143 C 390 150 430 190 466 226" stroke="var(--gate)"/>
+        <path d="M215 128 C 130 110 80 160 80 226" stroke="var(--press)"/>
+        <!-- waiting-to-record -->
+        <path d="M350 348 C 400 340 440 300 470 280" stroke="var(--timer)"/>
+        <!-- recording out -->
+        <path d="M540 276 C 560 310 575 335 590 356" stroke="var(--press)"/>
+        <line x1="550" y1="245" x2="636" y2="245" stroke="var(--press)"/>
+        <!-- waiting-to-end -->
+        <path d="M700 360 C 715 330 720 305 720 280" stroke="var(--timer)"/>
+        <!-- processing -->
+        <line x1="800" y1="245" x2="896" y2="245" stroke="var(--engine)"/>
+        <path d="M690 276 C 620 440 200 460 88 280" stroke="var(--engine)"/>
+        <!-- restore -->
+        <path d="M95 230 C 200 20 780 10 940 76" stroke="var(--store)" stroke-dasharray="6 5"/>
+        <!-- recorded → play -->
+        <path d="M905 230 C 880 190 850 155 815 130" stroke="var(--press)"/>
+        <path d="M840 92 C 870 88 880 90 896 96" stroke="var(--timer)"/>
+        <line x1="945" y1="230" x2="945" y2="130" stroke="var(--press)"/>
+        <!-- playing → recorded -->
+        <line x1="980" y1="126" x2="980" y2="226" stroke="var(--press)"/>
+        <path d="M1020 110 C 1070 130 1070 210 1024 244" stroke="var(--engine)"/>
+        <!-- held: delete -->
+        <path d="M915 276 C 800 480 240 490 112 280" stroke="var(--press)"/>
+        <path d="M1020 96 C 1160 120 1160 480 560 524 C 260 546 110 400 68 282" stroke="var(--press)"/>
+      </g>
+      <!-- edge labels -->
+      <g font-size="11" fill="var(--muted)">
+        <text x="98"  y="185" fill="var(--press)">press · sound-start</text>
+        <text x="96"  y="322" fill="var(--press)">press · wait</text>
+        <text x="230" y="243" fill="var(--press)">press · immediate</text>
+        <text x="360" y="188" fill="var(--gate)">input-detected</text>
+        <text x="96"  y="120" fill="var(--press)">press = cancel</text>
+        <text x="366" y="310" fill="var(--timer)">ready-to-record</text>
+        <text x="548" y="330" fill="var(--press)">press · wait</text>
+        <text x="556" y="233" fill="var(--press)">press</text>
+        <text x="728" y="322" fill="var(--timer)">ready-to-end</text>
+        <text x="806" y="233" fill="var(--engine)">complete</text>
+        <text x="330" y="430" fill="var(--engine)">recording-cancelled · take rounded to 0 cycles</text>
+        <text x="430" y="46"  fill="var(--store)">recording-loaded · restored from IndexedDB</text>
+        <text x="806" y="172" fill="var(--press)">press · wait</text>
+        <text x="845" y="76"  fill="var(--timer)">ready-to-play</text>
+        <text x="880" y="180" fill="var(--press)">press</text>
+        <text x="990" y="180" fill="var(--press)">press = stop</text>
+        <text x="1064" y="180" fill="var(--engine)">loop-end</text>
+        <text x="500" y="466" fill="var(--press)">held = delete</text>
+        <text x="560" y="546" fill="var(--press)">held = delete</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>The full lifecycle. Not drawn as an edge: <code>double-press</code> toggles looping from any state without changing it. With native looping, <code>loop-end</code> fires only when looping is off and a pass finishes — loops themselves never generate events.</figcaption>
+  </figure>
+
+  <table>
+    <thead><tr><th>Event</th><th>Fired by</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>press / double-press / held</code></td><td>your finger</td><td>the only human inputs; everything else is machinery</td></tr>
+      <tr><td><code>ready-to-record / -end / -play</code></td><td>boundary timer</td><td>a wait the plan scheduled has elapsed (cosmetic for play — audio was already scheduled sample-exact)</td></tr>
+      <tr><td><code>input-detected</code></td><td>InputGate</td><td>first signal above the trigger margin: the virtual press</td></tr>
+      <tr><td><code>processing-recording-complete</code></td><td>decoder</td><td>take decoded, sliced, quantised</td></tr>
+      <tr><td><code>recording-cancelled</code></td><td>decoder</td><td>take rounded to zero cycles — treated as an abort</td></tr>
+      <tr><td><code>loop-end</code></td><td>audio engine</td><td>a non-looping pass finished naturally</td></tr>
+      <tr><td><code>recording-loaded</code></td><td>persistence</td><td>a stored take rehydrated at page load</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="capture"><span class="no">4</span>Recording: roll through, cut once</h2>
+  <p class="prose">The recorder starts the moment you press and never waits. All alignment happens once, at the end, as a slice of the decoded audio. Timers and detection only choose <em>where to cut</em> — their jitter can change what gets discarded, never the result. Shown here: a sound-triggered, synced take.</p>
+
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 980 340" role="img" aria-label="Timeline of a sound-triggered take: recorder rolls from the press, gate estimates the floor then fires on the first note, the start boundary is claimed on the grid, the stop press snaps to a boundary, and the kept slice is an exact number of cycles.">
+      <defs>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <!-- grid boundaries -->
+      <g stroke="var(--line)" stroke-width="1">
+        <line x1="260" y1="40" x2="260" y2="268"/>
+        <line x1="530" y1="40" x2="530" y2="268"/>
+        <line x1="800" y1="40" x2="800" y2="268"/>
+      </g>
+      <g fill="var(--muted)" font-size="11" text-anchor="middle">
+        <text x="260" y="32">bar</text><text x="530" y="32">bar</text><text x="800" y="32">bar</text>
+      </g>
+      <!-- rows -->
+      <g fill="var(--muted)" font-size="11" text-anchor="end">
+        <text x="118" y="70">you</text>
+        <text x="118" y="122">gate</text>
+        <text x="118" y="172">recorder</text>
+        <text x="118" y="222">decisions</text>
+        <text x="118" y="290">result</text>
+      </g>
+      <!-- you -->
+      <circle cx="180" cy="66" r="5" fill="var(--press)"/>
+      <text x="180" y="52" font-size="11" fill="var(--press)" text-anchor="middle">press</text>
+      <g fill="currentColor" font-size="14" text-anchor="middle">
+        <text x="560" y="72">♪</text><text x="620" y="72">♪</text><text x="700" y="72">♪</text><text x="760" y="72">♪</text>
+      </g>
+      <circle cx="840" cy="66" r="5" fill="var(--press)"/>
+      <text x="846" y="52" font-size="11" fill="var(--press)" text-anchor="middle">press</text>
+      <!-- gate -->
+      <line x1="180" y1="118" x2="552" y2="118" stroke="var(--gate)" stroke-dasharray="4 4"/>
+      <circle cx="560" cy="118" r="5" fill="var(--gate)"/>
+      <text x="200" y="110" font-size="11" fill="var(--gate)">estimating noise floor…</text>
+      <text x="572" y="110" font-size="11" fill="var(--gate)">input-detected</text>
+      <!-- recorder -->
+      <rect x="180" y="160" width="700" height="18" rx="4" fill="var(--slice)" stroke="var(--engine)" stroke-width="1.2"/>
+      <text x="500" y="196" font-size="11" fill="var(--engine)" text-anchor="middle">MediaRecorder rolling the whole time</text>
+      <!-- decisions -->
+      <path d="M556 224 C 548 224 540 224 536 224" stroke="var(--gate)" fill="none" marker-end="url(#a3)"/>
+      <circle cx="530" cy="224" r="4" fill="currentColor"/>
+      <text x="548" y="240" font-size="11" fill="currentColor">b0 = boundary behind the onset</text>
+      <circle cx="800" cy="224" r="4" fill="currentColor"/>
+      <text x="798" y="212" font-size="11" text-anchor="end">bEnd = snap-back from the stop press</text>
+      <!-- result -->
+      <g font-size="11">
+        <rect x="180" y="276" width="350" height="26" fill="none" stroke="var(--line)" stroke-dasharray="4 4"/>
+        <text x="355" y="293" fill="var(--muted)" text-anchor="middle">discarded</text>
+        <rect x="530" y="272" width="270" height="34" fill="var(--slice)" stroke="var(--engine)" stroke-width="1.6"/>
+        <text x="665" y="293" fill="currentColor" text-anchor="middle" font-weight="500">kept: exactly n × cycle samples</text>
+        <rect x="800" y="276" width="80" height="26" fill="none" stroke="var(--line)" stroke-dasharray="4 4"/>
+        <text x="840" y="293" fill="var(--muted)" text-anchor="middle">disc.</text>
+      </g>
+      <text x="662" y="326" font-size="11" fill="var(--muted)" text-anchor="middle">+ onset wrap (PR #4, pending): audio just before b0 mixes onto the tail</text>
+    </svg>
+    </div>
+    <figcaption>Roll-through capture. The pre-roll and overshoot are real audio, deliberately discarded at slice time; the kept region is forced to an exact integer number of cycle samples, which is what makes drift impossible. If the slice rounds to zero cycles, the take cancels instead.</figcaption>
+  </figure>
+
+  <h2 id="grid"><span class="no">5</span>The grid: sync by construction</h2>
+  <p class="prose">There is no drift correction anywhere, because two invariants make drift impossible to express. Every synced buffer's <strong>length</strong> is an exact integer multiple of the cycle it locked to, and every synced playback <strong>claims</strong> a start time exactly on a boundary — then native looping (<code>loop&nbsp;=&nbsp;true</code>) repeats it sample-perfectly on the audio thread, with no JavaScript in the loop.</p>
+
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 900 250" role="img" aria-label="A shared grid of cycle boundaries: the metronome defines ticks, pad A spans exactly two cycles starting on a tick, pad B spans one cycle; references are searched metronome first.">
+      <g stroke="var(--line)">
+        <line x1="60" y1="60" x2="60" y2="200"/><line x1="200" y1="60" x2="200" y2="200"/>
+        <line x1="340" y1="60" x2="340" y2="200"/><line x1="480" y1="60" x2="480" y2="200"/>
+        <line x1="620" y1="60" x2="620" y2="200"/><line x1="760" y1="60" x2="760" y2="200"/>
+      </g>
+      <g fill="var(--muted)" font-size="11" text-anchor="middle">
+        <text x="60" y="48">origin</text>
+        <text x="200" y="48">+1·cycle</text><text x="340" y="48">+2</text><text x="480" y="48">+3</text><text x="620" y="48">+4</text><text x="760" y="48">+5</text>
+      </g>
+      <g font-size="12">
+        <rect x="60" y="72" width="700" height="18" fill="none" stroke="var(--timer)" stroke-width="1.4"/>
+        <text x="774" y="86" fill="var(--timer)">metronome · cycleSamples = round(rate·60·beats/bpm)</text>
+        <rect x="200" y="112" width="280" height="20" rx="4" fill="var(--slice)" stroke="var(--engine)" stroke-width="1.6"/>
+        <text x="492" y="127" fill="var(--engine)">pad A · length = 2 × cycle · origin claimed on a boundary</text>
+        <rect x="480" y="152" width="140" height="20" rx="4" fill="var(--slice)" stroke="var(--engine)" stroke-width="1.6"/>
+        <text x="632" y="167" fill="var(--engine)">pad B · locked to A's wrap while recording</text>
+      </g>
+      <g fill="var(--muted)" font-size="11.5">
+        <text x="60" y="226">reference search: running metronome first, then the lowest playing, looping, synced pad — a stopped metronome's grid is gone.</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>All members compute boundaries as <code>origin + k·cycle</code> from a fixed origin — multiplication, never accumulation, so float error stays ~10⁻¹³ s. A playing pad offers its own <em>wrap</em> (full length) as the boundary; only a running metronome subdivides into bars.</figcaption>
+  </figure>
+
+  <h2 id="gate"><span class="no">6</span>The gate: sound as a virtual press</h2>
+  <p class="prose">The <code>InputGate</code> is a sensor, not a decision-maker. Every ~15&nbsp;ms it measures the input's RMS; while <em>armed</em> it builds a noise-floor estimate from the quiet, and the first frames to clear <code>floor × trigger&nbsp;margin</code> become a timestamped onset — which then flows through the planner exactly as a press would. Detection only needs to be roughly right: synced takes are cut on the grid, unsynced takes are refined by walking back through the decoded samples to the attack's true edge.</p>
+
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 900 260" role="img" aria-label="Gate operation: mode moves from idle to armed to tracking; the signal sits at the noise floor until the first note crosses the trigger threshold after a debounce, and the onset time is backdated.">
+      <!-- mode strip -->
+      <g font-size="11" text-anchor="middle">
+        <rect x="60" y="28" width="80" height="22" rx="11" fill="none" stroke="var(--line)"/>
+        <text x="100" y="43" fill="var(--muted)">idle</text>
+        <rect x="140" y="28" width="420" height="22" rx="11" fill="none" stroke="var(--gate)"/>
+        <text x="350" y="43" fill="var(--gate)">armed · estimating floor</text>
+        <rect x="560" y="28" width="290" height="22" rx="11" fill="none" stroke="var(--gate)" stroke-dasharray="4 4"/>
+        <text x="705" y="43" fill="var(--gate)">tracking · floor frozen, last-sound updates</text>
+      </g>
+      <!-- thresholds -->
+      <g font-size="11">
+        <line x1="140" y1="196" x2="850" y2="196" stroke="var(--muted)" stroke-dasharray="5 4"/>
+        <text x="854" y="200" fill="var(--muted)">noise floor</text>
+        <line x1="140" y1="170" x2="850" y2="170" stroke="var(--gate)" stroke-dasharray="5 4"/>
+        <text x="854" y="174" fill="var(--gate)">release</text>
+        <line x1="140" y1="146" x2="850" y2="146" stroke="var(--gate)"/>
+        <text x="854" y="150" fill="var(--gate)">trigger</text>
+      </g>
+      <!-- signal -->
+      <polyline fill="none" stroke="currentColor" stroke-width="1.6"
+        points="60,205 100,203 140,206 180,204 220,206 260,203 300,206 340,204 380,206 420,203 460,205 500,204 530,206 552,200 562,150 574,96 590,110 620,100 660,118 700,108 740,124 780,116 820,130 850,126"/>
+      <!-- debounce + onset -->
+      <g font-size="11">
+        <line x1="562" y1="222" x2="592" y2="222" stroke="var(--gate)" stroke-width="3"/>
+        <text x="600" y="226" fill="var(--gate)">debounce: 2 frames above trigger</text>
+        <circle cx="592" cy="96" r="4" fill="var(--gate)"/>
+        <path d="M588 80 C 575 70 565 70 556 78" stroke="var(--gate)" fill="none"/>
+        <text x="548" y="70" fill="var(--gate)" text-anchor="end">onset backdated to first loud frame</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Both thresholds are relative to the measured floor (in dB), so the same settings adapt to any room — including other loops bleeding through speakers, which raise the floor automatically. The margins, debounce, and floor clamp are the per-pad tuning settings.</figcaption>
+  </figure>
+
+  <div class="note">
+    <strong>Known open issue.</strong> An onset currently always claims the boundary <em>behind</em> it — so entering a smidge <em>before</em> a bar line claims the previous bar and manufactures nearly a bar of silence. The agreed fix: run onsets through the same snap-back slider as presses, and make the onset wrap variable-length so a forward claim can never lose audio.
+  </div>
+
+  <footer>
+    Source: <code>src/pad/</code> — <code>pad.ts</code> (orchestrator) · <code>pad-state-machine.ts</code> (rules) · <code>pad-sync.ts</code> (planner &amp; grid) · <code>pad-audio.ts</code> (capture/playback) · <code>input-gate.ts</code> (sensor) · <code>pad-view.ts</code> · plus <code>metronome/</code>, <code>settings/</code>, <code>persistence.ts</code>. Diagram truth as of <code>fresh-build @ 572106c</code>; onset-wrap is PR&nbsp;#4, unmerged.
+  </footer>
+</div>
+
+</body>
+</html>
