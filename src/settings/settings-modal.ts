@@ -2,6 +2,7 @@ import type { PadSettings } from "@/pad/pad.js";
 import type { Pad } from "@/pad/pad.js";
 import { RECORDING_STATES } from "@/pad/pad.js";
 import { signal, effect } from "@/signals.js";
+import { listAudioInputs } from "@/input-devices.js";
 
 export const settingsPressed = signal(false);
 export const selectedPad = signal<number | null>(null);
@@ -48,7 +49,19 @@ function fieldMarkup(field: SettingsField, settings: PadSettings): string {
   }
 }
 
-function getFilledTemplate(pad: Pad, allPadIds: number[]) {
+function deviceOptions(devices: MediaDeviceInfo[], selectedId: string): string {
+  const options = ['<option value="">Default</option>'];
+  devices.forEach((device, i) => {
+    const label = device.label || `Device ${i + 1}`;
+    options.push(`<option value="${device.deviceId}"${device.deviceId === selectedId ? " selected" : ""}>${label}</option>`);
+  });
+  if (selectedId && !devices.some(device => device.deviceId === selectedId)) {
+    options.push(`<option value="${selectedId}" selected>Unknown device</option>`);
+  }
+  return options.join("");
+}
+
+function getFilledTemplate(pad: Pad, allPadIds: number[], devices: MediaDeviceInfo[]) {
   const s = pad.getSettings();
   const peerCheckboxes = allPadIds
     .filter(id => id !== pad.id)
@@ -65,6 +78,9 @@ function getFilledTemplate(pad: Pad, allPadIds: number[]) {
         <fieldset data-role="record-sources">
           <legend>Record from</legend>
           <label>Microphone<input type="checkbox" name="recordMic"${s.recordMic ? " checked" : ""}></label>
+          <label>Input device
+            <select name="inputDeviceId">${deviceOptions(devices, s.inputDeviceId)}</select>
+          </label>
           ${peerCheckboxes}
         </fieldset>
         <button>Close</button>
@@ -93,6 +109,7 @@ function readSettings(form: HTMLFormElement): PadSettings {
 
   settings.volume = Number(data.get("volume"));
   settings.recordMic = data.has("recordMic");
+  settings.inputDeviceId = String(data.get("inputDeviceId") ?? "");
   settings.recordSources = data.getAll("recordSource").map(v => Number(v));
   return settings as PadSettings;
 }
@@ -112,7 +129,7 @@ export class SettingsModal {
       const pad = pads[selectedPad.value];
       if (!pad) throw new Error(`Unknown pad id: ${selectedPad.value}`);
 
-      this.open(pad);
+      void this.open(pad);
 
     })
 
@@ -124,8 +141,9 @@ export class SettingsModal {
 
 
 
-  open(pad: Pad) {
-    this.dialog.innerHTML = getFilledTemplate(pad, this.padIds);
+  async open(pad: Pad) {
+    const devices = await listAudioInputs();
+    this.dialog.innerHTML = getFilledTemplate(pad, this.padIds, devices);
     this.dialog.showModal();
 
     const form = this.dialog.querySelector("form");
