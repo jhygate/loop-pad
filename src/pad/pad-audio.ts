@@ -18,7 +18,6 @@ export class PadAudioHandler {
   private looping = true;
   private capture: CaptureWindow | null = null;
   private recorderStartTime: number | null = null;
-  private cycleSamples: number | null = null;
   private scheduledPlaybackPending = false;
 
   constructor(
@@ -141,13 +140,11 @@ export class PadAudioHandler {
         const cycles = Math.max(1, Math.round((capture.endBoundary - capture.startBoundary) / capture.ref.cycleSec));
         const startOffsetSec = capture.startBoundary - this.recorderStartTime;
         this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
-        this.cycleSamples = capture.ref.cycleSamples;
       } else {
         if (capture?.ref) {
           console.warn("sync capture incomplete, keeping raw take", JSON.stringify(capture), this.recorderStartTime);
         }
         this.audioBuffer = trimBuffer(buffer, this.audioContext, this.trimOptions());
-        this.cycleSamples = capture?.sync ? this.audioBuffer.length : null;
       }
       this._maxGain = computeMaxGain(this.audioBuffer);
     } catch (e) {
@@ -205,7 +202,6 @@ export class PadAudioHandler {
   private deleteRecording() {
     this.stopSource();
     this.audioBuffer = null;
-    this.cycleSamples = null;
     this.capture = null;
     this._maxGain = 1;
   }
@@ -245,11 +241,11 @@ export class PadAudioHandler {
   }
 
   public get loopReference(): LoopReference | null {
-    if (this.playStartTime === null || this.cycleSamples === null) return null;
+    if (this.playStartTime === null || !this.audioBuffer) return null;
     return {
       originTime: this.playStartTime,
-      cycleSec: this.cycleSamples / this.audioContext.sampleRate,
-      cycleSamples: this.cycleSamples,
+      cycleSec: this.audioBuffer.duration,
+      cycleSamples: this.audioBuffer.length,
     };
   }
 
