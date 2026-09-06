@@ -2,6 +2,7 @@ import { PadState, ControllerPadEvent } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
 import type { CaptureWindow, LoopReference } from "@/pad/pad-sync.js";
 import { trimBuffer, computeMaxGain, extractAligned, type TrimOptions } from "@/audio-helpers.js";
+import { ONSET_WRAP_TIME } from "@/pad/pad-constants.js";
 import { getCachedInputSource, ensureInputSource } from "@/input-devices.js";
 
 export class PadAudioHandler {
@@ -143,7 +144,8 @@ export class PadAudioHandler {
           cancelled = true;
         } else {
           const startOffsetSec = capture.startBoundary - this.recorderStartTime;
-          this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
+          const wrapLeadSamples = Math.round(buffer.sampleRate * ONSET_WRAP_TIME / 1000);
+          this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples, wrapLeadSamples);
         }
       } else {
         if (capture?.ref) {
