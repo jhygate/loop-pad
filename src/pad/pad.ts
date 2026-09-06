@@ -29,6 +29,7 @@ export type PadSettings = {
   thresholdEnd: boolean;
   volume: number;
   recordMic: boolean;
+  inputDeviceId: string;
   recordSources: number[];
 }
 
@@ -56,6 +57,7 @@ const DEFAULT_SETTINGS: PadSettings = {
   thresholdEnd: false,
   volume: 1,
   recordMic: true,
+  inputDeviceId: "",
   recordSources: [],
 };
 
@@ -136,6 +138,7 @@ export class Pad {
     if (!updated.loopable) this.stateMachine.disableLooping();
     this.audioHandler.setLooping(this.looping);
     this.audioHandler.setVolume(updated.volume);
+    this.audioHandler.prepareInputDevice(updated.inputDeviceId);
     this.render();
   }
 

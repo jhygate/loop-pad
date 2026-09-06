@@ -2,6 +2,7 @@ import { PadState, ControllerPadEvent } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
 import type { CaptureWindow, LoopReference } from "@/pad/pad-sync.js";
 import { trimBuffer, computeMaxGain, extractAligned, type TrimOptions } from "@/audio-helpers.js";
+import { getCachedInputSource, ensureInputSource } from "@/input-devices.js";
 
 export class PadAudioHandler {
   private readonly mediaRecorder: MediaRecorder;
@@ -94,16 +95,28 @@ export class PadAudioHandler {
     this.unwireRecordSources();
   }
 
+  public prepareInputDevice(deviceId: string) {
+    void ensureInputSource(this.audioContext, deviceId);
+  }
+
   private wireRecordSources() {
     const s = this.getSettings();
     const sources: AudioNode[] = [];
-    if (s.recordMic) sources.push(this.micSource);
+    if (s.recordMic) sources.push(this.inputSource(s.inputDeviceId));
     for (const peerId of s.recordSources) {
       const tap = this.getPeerOutput(peerId);
       if (tap) sources.push(tap);
     }
     for (const source of sources) source.connect(this.recordInput);
     this.connectedSources = sources;
+  }
+
+  private inputSource(deviceId: string): AudioNode {
+    if (!deviceId) return this.micSource;
+    const cached = getCachedInputSource(deviceId);
+    if (cached) return cached;
+    console.warn(`input device ${deviceId} unavailable; using default mic`);
+    return this.micSource;
   }
 
   private unwireRecordSources() {
