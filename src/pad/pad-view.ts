@@ -120,6 +120,6 @@ export class PadViewHandler {
     this.progressElement.style.animation = "none";
     void this.progressElement.offsetHeight;
     this.progressElement.style.animation = `progressFill ${audioLength}s linear infinite`;
-    this.progressElement.style.animationDelay = `-${audioPlayed}s`;
+    this.progressElement.style.animationDelay = `${-audioPlayed}s`;
   }
 }
