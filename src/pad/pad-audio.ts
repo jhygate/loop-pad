@@ -236,7 +236,7 @@ export class PadAudioHandler {
   public get playbackElapsed(): number | null {
     if (this.playStartTime === null || !this.audioBuffer) return null;
     const elapsed = this.audioContext.currentTime - this.playStartTime;
-    if (elapsed < 0) return null;
+    if (elapsed < 0) return elapsed;
     return elapsed % this.audioBuffer.duration;
   }
 
