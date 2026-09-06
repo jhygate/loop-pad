@@ -1,7 +1,5 @@
 import type { ControllerPadEvent, PadEvent, PadState } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
-import { SYNC_GRACE_TIME } from "@/pad/pad-constants.js";
-
 export type SyncDecision = "immediate" | "wait";
 
 export type LoopReference = {
@@ -35,14 +33,9 @@ export type SyncPlan = {
 
 const NO_SYNC: SyncPlan = { decision: "immediate", apply: () => { } };
 
-export function nextBoundary(ref: LoopReference, time: number): number {
-  const grace = SYNC_GRACE_TIME / 1000;
-  const cycleIndex = Math.ceil((time - ref.originTime - grace) / ref.cycleSec);
-  return ref.originTime + cycleIndex * ref.cycleSec;
-}
-
-export function nearestBoundary(ref: LoopReference, time: number): number {
-  const cycleIndex = Math.round((time - ref.originTime) / ref.cycleSec);
+export function snapBoundary(ref: LoopReference, time: number, backPct: number): number {
+  const frac = (time - ref.originTime) / ref.cycleSec;
+  const cycleIndex = Math.ceil(frac - backPct / 100);
   return ref.originTime + cycleIndex * ref.cycleSec;
 }
 
@@ -83,7 +76,7 @@ export class PadSyncPlanner {
     }
 
     const now = this.now();
-    const startBoundary = nextBoundary(ref, now);
+    const startBoundary = snapBoundary(ref, now, this.getSettings().recordStartBackPct);
     const capture: CaptureWindow = { sync, ref, startBoundary, endBoundary: null };
     if (startBoundary > now) {
       return {
@@ -102,7 +95,7 @@ export class PadSyncPlanner {
     if (!capture?.ref) return NO_SYNC;
 
     const now = this.now();
-    const endBoundary = nearestBoundary(capture.ref, now);
+    const endBoundary = snapBoundary(capture.ref, now, this.getSettings().recordEndBackPct);
     if (endBoundary > now) {
       return {
         decision: "wait",
@@ -121,7 +114,7 @@ export class PadSyncPlanner {
     if (!ref) return NO_SYNC;
 
     const now = this.now();
-    const startBoundary = nextBoundary(ref, now);
+    const startBoundary = snapBoundary(ref, now, this.getSettings().playStartBackPct);
     if (startBoundary > now) {
       return {
         decision: "wait",

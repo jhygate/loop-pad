@@ -126,6 +126,7 @@ export class PadAudioHandler {
   }
 
   private async processRecording() {
+    let cancelled = false;
     try {
       const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
       const arrayBuffer = await blob.arrayBuffer();
@@ -137,20 +138,24 @@ export class PadAudioHandler {
         capture.endBoundary !== null &&
         this.recorderStartTime !== null
       ) {
-        const cycles = Math.max(1, Math.round((capture.endBoundary - capture.startBoundary) / capture.ref.cycleSec));
-        const startOffsetSec = capture.startBoundary - this.recorderStartTime;
-        this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
+        const cycles = Math.round((capture.endBoundary - capture.startBoundary) / capture.ref.cycleSec);
+        if (cycles === 0) {
+          cancelled = true;
+        } else {
+          const startOffsetSec = capture.startBoundary - this.recorderStartTime;
+          this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
+        }
       } else {
         if (capture?.ref) {
           console.warn("sync capture incomplete, keeping raw take", JSON.stringify(capture), this.recorderStartTime);
         }
         this.audioBuffer = trimBuffer(buffer, this.audioContext, this.trimOptions());
       }
-      this._maxGain = computeMaxGain(this.audioBuffer);
+      if (this.audioBuffer) this._maxGain = computeMaxGain(this.audioBuffer);
     } catch (e) {
       console.error("recording decode failed", e);
     } finally {
-      this.onControllerEvent('processing-recording-complete');
+      this.onControllerEvent(cancelled ? 'recording-cancelled' : 'processing-recording-complete');
     }
   }
 

@@ -10,11 +10,15 @@ export const selectedPad = signal<number | null>(null);
 type SettingsField =
   | { kind: "checkbox"; name: keyof PadSettings; label: string }
   | { kind: "number"; name: keyof PadSettings; label: string; step: number; min?: number }
+  | { kind: "range"; name: keyof PadSettings; label: string; min: number; max: number; step: number }
   | { kind: "select"; name: keyof PadSettings; label: string; options: { value: string; label: string }[] };
 
 const FIELDS: SettingsField[] = [
   { kind: "checkbox", name: "loopable", label: "Loopable" },
   { kind: "checkbox", name: "sync", label: "Sync" },
+  { kind: "range", name: "recordStartBackPct", label: "Record start snap back (%)", min: 0, max: 100, step: 1 },
+  { kind: "range", name: "recordEndBackPct", label: "Record end snap back (%)", min: 0, max: 100, step: 1 },
+  { kind: "range", name: "playStartBackPct", label: "Play snap back (%)", min: 0, max: 100, step: 1 },
   {
     kind: "select", name: "playingPressBehavior", label: "Play behavior",
     options: [{ value: "stop", label: "Stop" }, { value: "restart", label: "Restart" }],
@@ -33,6 +37,10 @@ function fieldMarkup(field: SettingsField, settings: PadSettings): string {
     case "number":
       return `<label>${field.label}
           <input type="number" name="${field.name}" step="${field.step}"${field.min === undefined ? "" : ` min="${field.min}"`} value="${value}">
+        </label>`;
+    case "range":
+      return `<label>${field.label}
+          <input type="range" name="${field.name}" min="${field.min}" max="${field.max}" step="${field.step}" value="${value}">
         </label>`;
     case "select":
       return `<label>${field.label}
@@ -94,6 +102,7 @@ function readSettings(form: HTMLFormElement): PadSettings {
         settings[field.name] = data.has(field.name);
         break;
       case "number":
+      case "range":
         settings[field.name] = Number(data.get(field.name));
         break;
       case "select":

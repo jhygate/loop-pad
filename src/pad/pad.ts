@@ -22,6 +22,9 @@ import type { Metronome } from "@/metronome/metronome.js";
 
 export type PadSettings = {
   sync: boolean;
+  recordStartBackPct: number;
+  recordEndBackPct: number;
+  playStartBackPct: number;
   playingPressBehavior: "stop" | "restart";
   loopable: boolean;
   audioThreshold: number;
@@ -50,6 +53,9 @@ export type PadContext = {
 
 const DEFAULT_SETTINGS: PadSettings = {
   sync: true,
+  recordStartBackPct: 50,
+  recordEndBackPct: 50,
+  playStartBackPct: 50,
   playingPressBehavior: "stop",
   loopable: true,
   audioThreshold: 0,
