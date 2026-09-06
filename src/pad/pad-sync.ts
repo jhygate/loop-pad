@@ -41,6 +41,11 @@ export function nextBoundary(ref: LoopReference, time: number): number {
   return ref.originTime + cycleIndex * ref.cycleSec;
 }
 
+export function nearestBoundary(ref: LoopReference, time: number): number {
+  const cycleIndex = Math.round((time - ref.originTime) / ref.cycleSec);
+  return ref.originTime + cycleIndex * ref.cycleSec;
+}
+
 export class PadSyncPlanner {
   constructor(
     private readonly getSettings: () => PadSettings,
@@ -97,7 +102,7 @@ export class PadSyncPlanner {
     if (!capture?.ref) return NO_SYNC;
 
     const now = this.now();
-    const endBoundary = nextBoundary(capture.ref, now);
+    const endBoundary = nearestBoundary(capture.ref, now);
     if (endBoundary > now) {
       return {
         decision: "wait",
