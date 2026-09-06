@@ -130,6 +130,9 @@ export class PadAudioHandler {
         this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
         this.cycleSamples = capture.ref.cycleSamples;
       } else {
+        if (capture?.ref) {
+          console.warn("sync capture incomplete, keeping raw take", JSON.stringify(capture), this.recorderStartTime);
+        }
         this.audioBuffer = trimBuffer(buffer, this.audioContext, this.trimOptions());
         this.cycleSamples = capture?.sync ? this.audioBuffer.length : null;
       }
