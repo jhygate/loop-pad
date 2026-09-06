@@ -17,11 +17,13 @@ export type CaptureWindow = {
   ref: LoopReference | null;
   startBoundary: number | null;
   endBoundary: number | null;
+  noiseFloor: number | null;
 };
 
 export type SyncEffects = {
   scheduleReady: (event: ControllerPadEvent, delayMs: number) => void;
   beginCapture: (capture: CaptureWindow) => void;
+  setCaptureStart: (startBoundary: number) => void;
   endCapture: (endBoundary: number) => void;
   schedulePlayback: (boundaryTime: number) => void;
 };
@@ -45,9 +47,12 @@ export class PadSyncPlanner {
     private readonly now: () => number,
     private readonly getSources: () => LoopReferenceSource[],
     private readonly getActiveCapture: () => CaptureWindow | null,
+    private readonly getDetectedOnset: () => number | null,
+    private readonly getLastSoundTime: () => number | null,
   ) { }
 
   public planFor(state: PadState, event: PadEvent): SyncPlan {
+    if (state === "armed" && event === "input-detected") return this.planSoundStart();
     if (event !== "press") return NO_SYNC;
     switch (state) {
       case "empty": return this.planRecordStart();
@@ -66,18 +71,27 @@ export class PadSyncPlanner {
   }
 
   private planRecordStart(): SyncPlan {
-    const sync = this.getSettings().sync;
+    const settings = this.getSettings();
+    const sync = settings.sync;
     const ref = sync ? this.findReference() : null;
+
+    if (settings.startTrigger === "sound") {
+      return {
+        decision: "immediate",
+        apply: (effects) => effects.beginCapture({ sync, ref, startBoundary: null, endBoundary: null, noiseFloor: null }),
+      };
+    }
+
     if (!ref) {
       return {
         decision: "immediate",
-        apply: (effects) => effects.beginCapture({ sync, ref: null, startBoundary: null, endBoundary: null }),
+        apply: (effects) => effects.beginCapture({ sync, ref: null, startBoundary: null, endBoundary: null, noiseFloor: null }),
       };
     }
 
     const now = this.now();
-    const startBoundary = snapBoundary(ref, now, this.getSettings().recordStartBackPct);
-    const capture: CaptureWindow = { sync, ref, startBoundary, endBoundary: null };
+    const startBoundary = snapBoundary(ref, now, settings.recordStartBackPct);
+    const capture: CaptureWindow = { sync, ref, startBoundary, endBoundary: null, noiseFloor: null };
     if (startBoundary > now) {
       return {
         decision: "wait",
@@ -90,12 +104,28 @@ export class PadSyncPlanner {
     return { decision: "immediate", apply: (effects) => effects.beginCapture(capture) };
   }
 
+  private planSoundStart(): SyncPlan {
+    const capture = this.getActiveCapture();
+    const onset = this.getDetectedOnset() ?? this.now();
+    const start = capture?.ref ? snapBoundary(capture.ref, onset, 100) : onset;
+    return { decision: "immediate", apply: (effects) => effects.setCaptureStart(start) };
+  }
+
   private planRecordEnd(): SyncPlan {
     const capture = this.getActiveCapture();
-    if (!capture?.ref) return NO_SYNC;
-
     const now = this.now();
-    const endBoundary = snapBoundary(capture.ref, now, this.getSettings().recordEndBackPct);
+    const virtualTime = this.getSettings().endTrigger === "sound"
+      ? Math.min(this.getLastSoundTime() ?? now, now)
+      : now;
+
+    if (!capture?.ref) {
+      if (capture && capture.startBoundary !== null) {
+        return { decision: "immediate", apply: (effects) => effects.endCapture(virtualTime) };
+      }
+      return NO_SYNC;
+    }
+
+    const endBoundary = snapBoundary(capture.ref, virtualTime, this.getSettings().recordEndBackPct);
     if (endBoundary > now) {
       return {
         decision: "wait",

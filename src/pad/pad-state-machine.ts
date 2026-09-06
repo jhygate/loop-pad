@@ -2,6 +2,7 @@ import { type PadContext } from "@/pad/pad.js";
 
 export type PadState =
   | "empty"
+  | "armed"
   | "waiting-to-record"
   | "recording"
   | "waiting-to-end-recording"
@@ -28,6 +29,7 @@ export type ControllerPadEvent =
   | "processing-recording-complete"
   | "recording-cancelled"
   | "recording-loaded"
+  | "input-detected"
 
 export type PadEvent = UserPadEvent | ControllerPadEvent
 
@@ -57,7 +59,20 @@ const rules: Rule[] = [
 
   {
     from: "empty", event: "press",
-    to: ({ ctx }) => ctx.syncDecision === "wait" ? "waiting-to-record" : "recording"
+    to: ({ ctx }) => {
+      if (ctx.settings.startTrigger === "sound") return "armed";
+      return ctx.syncDecision === "wait" ? "waiting-to-record" : "recording";
+    }
+  },
+
+  {
+    from: "armed", event: "input-detected",
+    to: () => "recording"
+  },
+
+  {
+    from: "armed", event: "press",
+    to: () => "empty"
   },
 
   {

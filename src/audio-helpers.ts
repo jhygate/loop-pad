@@ -104,3 +104,26 @@ function peakAmplitude(channels: Float32Array[]): number {
   }
   return peak;
 }
+
+export function refineOnset(
+  buffer: AudioBuffer,
+  fromSample: number,
+  thresholdLinear: number,
+  maxBackSamples: number,
+): number {
+  const channel = buffer.getChannelData(0);
+  const hop = 64;
+  let pos = Math.min(Math.max(0, fromSample), buffer.length);
+  const limit = Math.max(0, pos - maxBackSamples);
+  while (pos > limit) {
+    const from = Math.max(limit, pos - hop);
+    let peak = 0;
+    for (let i = from; i < pos; i++) {
+      const abs = Math.abs(channel[i]);
+      if (abs > peak) peak = abs;
+    }
+    if (peak <= thresholdLinear) return pos;
+    pos = from;
+  }
+  return pos;
+}

@@ -23,6 +23,12 @@ import { savePadState, saveRecording } from "@/persistence.js";
 
 export type PadSettings = {
   sync: boolean;
+  startTrigger: "press" | "sound";
+  endTrigger: "press" | "sound";
+  triggerMarginDb: number;
+  releaseMarginDb: number;
+  debounceFrames: number;
+  floorClampDb: number;
   recordStartBackPct: number;
   recordEndBackPct: number;
   playStartBackPct: number;
@@ -38,6 +44,7 @@ export type PadSettings = {
 }
 
 export const RECORDING_STATES: PadState[] = [
+  "armed",
   "waiting-to-record",
   "recording",
   "waiting-to-end-recording",
@@ -54,6 +61,12 @@ export type PadContext = {
 
 const DEFAULT_SETTINGS: PadSettings = {
   sync: true,
+  startTrigger: "press",
+  endTrigger: "press",
+  triggerMarginDb: 10,
+  releaseMarginDb: 6,
+  debounceFrames: 2,
+  floorClampDb: -70,
   recordStartBackPct: 50,
   recordEndBackPct: 50,
   playStartBackPct: 50,
@@ -80,6 +93,7 @@ export class Pad {
   private readonly syncEffects: SyncEffects = {
     scheduleReady: (event, delayMs) => this.scheduleReady(event, delayMs),
     beginCapture: (capture) => this.audioHandler.beginCapture(capture),
+    setCaptureStart: (startBoundary) => this.audioHandler.setCaptureStart(startBoundary),
     endCapture: (endBoundary) => this.audioHandler.endCapture(endBoundary),
     schedulePlayback: (boundaryTime) => this.audioHandler.schedulePlayback(boundaryTime),
   };
@@ -118,6 +132,8 @@ export class Pad {
       () => this.audioHandler.now(),
       () => this.referenceSources(),
       () => this.audioHandler.activeCapture,
+      () => this.audioHandler.detectedOnsetTime,
+      () => this.audioHandler.lastSoundTime,
     );
 
     effect(() => this.render());

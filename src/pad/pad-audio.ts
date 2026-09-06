@@ -1,8 +1,9 @@
 import { PadState, ControllerPadEvent } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
 import type { CaptureWindow, LoopReference } from "@/pad/pad-sync.js";
-import { trimBuffer, computeMaxGain, extractAligned, type TrimOptions } from "@/audio-helpers.js";
+import { trimBuffer, computeMaxGain, extractAligned, refineOnset, type TrimOptions } from "@/audio-helpers.js";
 import { getCachedInputSource, ensureInputSource } from "@/input-devices.js";
+import { MONITOR_FRAME_TIME, ONSET_BACKTRACK_MARGIN, ONSET_BACKTRACK_TIME } from "@/pad/pad-constants.js";
 
 export class PadAudioHandler {
   private readonly mediaRecorder: MediaRecorder;
@@ -19,6 +20,18 @@ export class PadAudioHandler {
   private capture: CaptureWindow | null = null;
   private recorderStartTime: number | null = null;
   private scheduledPlaybackPending = false;
+  private discardRecording = false;
+  private monitorAnalyser: AnalyserNode | null = null;
+  private monitorSource: AudioNode | null = null;
+  private monitorData: Float32Array<ArrayBuffer> | null = null;
+  private monitorTimerId = -1;
+  private monitorFrames: number[] = [];
+  private noiseFloor = 0;
+  private floorFrozen = false;
+  private awaitingOnset = false;
+  private aboveCount = 0;
+  private _detectedOnsetTime: number | null = null;
+  private _lastSoundTime: number | null = null;
 
   constructor(
     stream: MediaStream,
@@ -52,12 +65,19 @@ export class PadAudioHandler {
       case "empty":
         this.deleteRecording();
         break;
+      case "armed":
+        this.startRecording();
+        this.startMonitoring(true);
+        break;
       case "waiting-to-record":
       case "recording":
         this.startRecording();
+        if (this.getSettings().endTrigger === "sound") this.startMonitoring(false);
+        else if (!this.awaitingOnset) this.stopMonitoring();
         break;
       case "processing-recording":
         this.stopRecording();
+        this.stopMonitoring();
         break;
       case "recorded":
         this.stopPlaying();
@@ -73,12 +93,94 @@ export class PadAudioHandler {
     this.capture = capture;
   }
 
+  public setCaptureStart(startBoundary: number) {
+    if (!this.capture) return;
+    this.capture.startBoundary = startBoundary;
+    this.capture.noiseFloor = this.noiseFloor;
+  }
+
   public endCapture(endBoundary: number) {
     if (this.capture) this.capture.endBoundary = endBoundary;
   }
 
   public get activeCapture(): CaptureWindow | null {
     return this.capture;
+  }
+
+  public get detectedOnsetTime(): number | null {
+    return this._detectedOnsetTime;
+  }
+
+  public get lastSoundTime(): number | null {
+    return this._lastSoundTime;
+  }
+
+  private startMonitoring(awaitOnset: boolean) {
+    if (this.monitorTimerId !== -1) {
+      if (!awaitOnset) this.awaitingOnset = false;
+      return;
+    }
+    this.monitorSource = this.inputSource(this.getSettings().inputDeviceId);
+    this.monitorAnalyser = this.audioContext.createAnalyser();
+    this.monitorAnalyser.fftSize = 2048;
+    this.monitorAnalyser.smoothingTimeConstant = 0;
+    this.monitorSource.connect(this.monitorAnalyser);
+    this.monitorData = new Float32Array(this.monitorAnalyser.fftSize);
+    this.monitorFrames = [];
+    this.noiseFloor = 0;
+    this.floorFrozen = !awaitOnset;
+    this.awaitingOnset = awaitOnset;
+    this.aboveCount = 0;
+    this._detectedOnsetTime = null;
+    this._lastSoundTime = null;
+    this.monitorTimerId = setInterval(() => this.monitorTick(), MONITOR_FRAME_TIME);
+  }
+
+  private stopMonitoring() {
+    if (this.monitorTimerId === -1) return;
+    clearInterval(this.monitorTimerId);
+    this.monitorTimerId = -1;
+    if (this.monitorSource && this.monitorAnalyser) {
+      try { this.monitorSource.disconnect(this.monitorAnalyser); } catch { /* already disconnected */ }
+    }
+    this.monitorAnalyser = null;
+    this.monitorSource = null;
+    this.awaitingOnset = false;
+  }
+
+  private monitorTick() {
+    if (!this.monitorAnalyser || !this.monitorData) return;
+    this.monitorAnalyser.getFloatTimeDomainData(this.monitorData);
+    let sumSquares = 0;
+    for (const v of this.monitorData) sumSquares += v * v;
+    const rms = Math.sqrt(sumSquares / this.monitorData.length);
+
+    const s = this.getSettings();
+    if (!this.floorFrozen) {
+      this.monitorFrames.push(rms);
+      if (this.monitorFrames.length > 300) this.monitorFrames.shift();
+      const sorted = [...this.monitorFrames].sort((a, b) => a - b);
+      this.noiseFloor = sorted[Math.floor(sorted.length / 2)];
+    }
+    const dbToLin = (db: number) => Math.pow(10, db / 20);
+    const floor = Math.max(this.noiseFloor, dbToLin(s.floorClampDb));
+
+    if (rms > floor * dbToLin(s.releaseMarginDb)) {
+      this._lastSoundTime = this.audioContext.currentTime;
+    }
+
+    if (!this.awaitingOnset) return;
+    if (rms > floor * dbToLin(s.triggerMarginDb)) {
+      this.aboveCount += 1;
+      if (this.aboveCount >= s.debounceFrames) {
+        this.awaitingOnset = false;
+        this.floorFrozen = true;
+        this._detectedOnsetTime = this.audioContext.currentTime - this.aboveCount * MONITOR_FRAME_TIME / 1000;
+        this.onControllerEvent('input-detected');
+      }
+    } else {
+      this.aboveCount = 0;
+    }
   }
 
   public startRecording() {
@@ -126,6 +228,11 @@ export class PadAudioHandler {
   }
 
   private async processRecording() {
+    if (this.discardRecording) {
+      this.discardRecording = false;
+      this.chunks = [];
+      return;
+    }
     let cancelled = false;
     try {
       const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
@@ -145,6 +252,19 @@ export class PadAudioHandler {
           const startOffsetSec = capture.startBoundary - this.recorderStartTime;
           this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
         }
+      } else if (
+        capture &&
+        capture.startBoundary !== null &&
+        capture.endBoundary !== null &&
+        this.recorderStartTime !== null
+      ) {
+        const rate = buffer.sampleRate;
+        const startSample = Math.round((capture.startBoundary - this.recorderStartTime) * rate);
+        const endSample = Math.min(Math.round((capture.endBoundary - this.recorderStartTime) * rate), buffer.length);
+        const threshold = (capture.noiseFloor ?? 0) * ONSET_BACKTRACK_MARGIN;
+        const refined = refineOnset(buffer, startSample, threshold, Math.round(rate * ONSET_BACKTRACK_TIME / 1000));
+        const length = Math.max(1, endSample - refined);
+        this.audioBuffer = extractAligned(buffer, this.audioContext, refined / rate, length);
       } else {
         if (capture?.ref) {
           console.warn("sync capture incomplete, keeping raw take", JSON.stringify(capture), this.recorderStartTime);
@@ -206,6 +326,11 @@ export class PadAudioHandler {
 
   private deleteRecording() {
     this.stopSource();
+    this.stopMonitoring();
+    if (this.mediaRecorder.state === "recording") {
+      this.discardRecording = true;
+      this.stopRecording();
+    }
     this.audioBuffer = null;
     this.capture = null;
     this._maxGain = 1;

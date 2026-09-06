@@ -9,6 +9,7 @@ const loopIcon = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" 
 
 const STATEMAPPING: Record<PadState, { icon: string; className?: string }> = {
   "empty": { icon: recordIcon },
+  "armed": { icon: recordIcon, className: "greyed" },
   "waiting-to-record": { icon: recordIcon, className: "pulse" },
   "recording": { icon: recordIcon, className: "pulse" },
   "waiting-to-end-recording": { icon: pauseIcon, className: "pulse" },

@@ -16,6 +16,18 @@ type SettingsField =
 const FIELDS: SettingsField[] = [
   { kind: "checkbox", name: "loopable", label: "Loopable" },
   { kind: "checkbox", name: "sync", label: "Sync" },
+  {
+    kind: "select", name: "startTrigger", label: "Start recording on",
+    options: [{ value: "press", label: "Press" }, { value: "sound", label: "First sound" }],
+  },
+  {
+    kind: "select", name: "endTrigger", label: "End recording at",
+    options: [{ value: "press", label: "Press" }, { value: "sound", label: "Last sound" }],
+  },
+  { kind: "number", name: "triggerMarginDb", label: "Trigger margin (dB)", step: 1 },
+  { kind: "number", name: "releaseMarginDb", label: "Release margin (dB)", step: 1 },
+  { kind: "number", name: "debounceFrames", label: "Debounce (frames)", step: 1, min: 1 },
+  { kind: "number", name: "floorClampDb", label: "Floor clamp (dBFS)", step: 1 },
   { kind: "range", name: "recordStartBackPct", label: "Record start snap back (%)", min: 0, max: 100, step: 1 },
   { kind: "range", name: "recordEndBackPct", label: "Record end snap back (%)", min: 0, max: 100, step: 1 },
   { kind: "range", name: "playStartBackPct", label: "Play snap back (%)", min: 0, max: 100, step: 1 },
