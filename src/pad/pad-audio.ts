@@ -290,7 +290,7 @@ export class PadAudioHandler {
     this.stopSource();
     const now = this.audioContext.currentTime;
     const offsetSec = boundaryTime < now
-      ? Math.min(now - boundaryTime, this.audioBuffer.duration)
+      ? (now - boundaryTime) % this.audioBuffer.duration
       : 0;
     this.startSource(Math.max(boundaryTime, now), offsetSec, boundaryTime);
     this.scheduledPlaybackPending = true;
