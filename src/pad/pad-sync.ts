@@ -23,9 +23,18 @@ export type CaptureWindow = {
 export type SyncEffects = {
   scheduleReady: (event: ControllerPadEvent, delayMs: number) => void;
   beginCapture: (capture: CaptureWindow) => void;
-  setCaptureStart: (startBoundary: number) => void;
+  captureOnset: (startBoundary: number) => void;
   endCapture: (endBoundary: number) => void;
   schedulePlayback: (boundaryTime: number) => void;
+};
+
+export type PlannerDeps = {
+  settings: () => PadSettings;
+  now: () => number;
+  sources: () => LoopReferenceSource[];
+  activeCapture: () => CaptureWindow | null;
+  detectedOnset: () => number | null;
+  lastSound: () => number | null;
 };
 
 export type SyncPlan = {
@@ -41,15 +50,12 @@ export function snapBoundary(ref: LoopReference, time: number, backPct: number):
   return ref.originTime + cycleIndex * ref.cycleSec;
 }
 
+export function previousBoundary(ref: LoopReference, time: number): number {
+  return snapBoundary(ref, time, 100);
+}
+
 export class PadSyncPlanner {
-  constructor(
-    private readonly getSettings: () => PadSettings,
-    private readonly now: () => number,
-    private readonly getSources: () => LoopReferenceSource[],
-    private readonly getActiveCapture: () => CaptureWindow | null,
-    private readonly getDetectedOnset: () => number | null,
-    private readonly getLastSoundTime: () => number | null,
-  ) { }
+  constructor(private readonly deps: PlannerDeps) { }
 
   public planFor(state: PadState, event: PadEvent): SyncPlan {
     if (state === "armed" && event === "input-detected") return this.planSoundStart();
@@ -63,7 +69,7 @@ export class PadSyncPlanner {
   }
 
   private findReference(): LoopReference | null {
-    for (const source of this.getSources()) {
+    for (const source of this.deps.sources()) {
       const ref = source.getLoopReference();
       if (ref) return ref;
     }
@@ -71,7 +77,7 @@ export class PadSyncPlanner {
   }
 
   private planRecordStart(): SyncPlan {
-    const settings = this.getSettings();
+    const settings = this.deps.settings();
     const sync = settings.sync;
     const ref = sync ? this.findReference() : null;
 
@@ -89,7 +95,7 @@ export class PadSyncPlanner {
       };
     }
 
-    const now = this.now();
+    const now = this.deps.now();
     const startBoundary = snapBoundary(ref, now, settings.recordStartBackPct);
     const capture: CaptureWindow = { sync, ref, startBoundary, endBoundary: null, noiseFloor: null };
     if (startBoundary > now) {
@@ -105,17 +111,17 @@ export class PadSyncPlanner {
   }
 
   private planSoundStart(): SyncPlan {
-    const capture = this.getActiveCapture();
-    const onset = this.getDetectedOnset() ?? this.now();
-    const start = capture?.ref ? snapBoundary(capture.ref, onset, 100) : onset;
-    return { decision: "immediate", apply: (effects) => effects.setCaptureStart(start) };
+    const capture = this.deps.activeCapture();
+    const onset = this.deps.detectedOnset() ?? this.deps.now();
+    const start = capture?.ref ? previousBoundary(capture.ref, onset) : onset;
+    return { decision: "immediate", apply: (effects) => effects.captureOnset(start) };
   }
 
   private planRecordEnd(): SyncPlan {
-    const capture = this.getActiveCapture();
-    const now = this.now();
-    const virtualTime = this.getSettings().endTrigger === "sound"
-      ? Math.min(this.getLastSoundTime() ?? now, now)
+    const capture = this.deps.activeCapture();
+    const now = this.deps.now();
+    const virtualTime = this.deps.settings().endTrigger === "sound"
+      ? Math.min(this.deps.lastSound() ?? now, now)
       : now;
 
     if (!capture?.ref) {
@@ -125,7 +131,7 @@ export class PadSyncPlanner {
       return NO_SYNC;
     }
 
-    const endBoundary = snapBoundary(capture.ref, virtualTime, this.getSettings().recordEndBackPct);
+    const endBoundary = snapBoundary(capture.ref, virtualTime, this.deps.settings().recordEndBackPct);
     if (endBoundary > now) {
       return {
         decision: "wait",
@@ -139,12 +145,12 @@ export class PadSyncPlanner {
   }
 
   private planPlayStart(): SyncPlan {
-    if (!this.getSettings().sync) return NO_SYNC;
+    if (!this.deps.settings().sync) return NO_SYNC;
     const ref = this.findReference();
     if (!ref) return NO_SYNC;
 
-    const now = this.now();
-    const startBoundary = snapBoundary(ref, now, this.getSettings().playStartBackPct);
+    const now = this.deps.now();
+    const startBoundary = snapBoundary(ref, now, this.deps.settings().playStartBackPct);
     if (startBoundary > now) {
       return {
         decision: "wait",

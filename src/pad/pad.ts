@@ -93,7 +93,7 @@ export class Pad {
   private readonly syncEffects: SyncEffects = {
     scheduleReady: (event, delayMs) => this.scheduleReady(event, delayMs),
     beginCapture: (capture) => this.audioHandler.beginCapture(capture),
-    setCaptureStart: (startBoundary) => this.audioHandler.setCaptureStart(startBoundary),
+    captureOnset: (startBoundary) => this.audioHandler.captureOnset(startBoundary),
     endCapture: (endBoundary) => this.audioHandler.endCapture(endBoundary),
     schedulePlayback: (boundaryTime) => this.audioHandler.schedulePlayback(boundaryTime),
   };
@@ -127,14 +127,14 @@ export class Pad {
       () => this.render(),
     );
 
-    this.syncPlanner = new PadSyncPlanner(
-      () => this.settings,
-      () => this.audioHandler.now(),
-      () => this.referenceSources(),
-      () => this.audioHandler.activeCapture,
-      () => this.audioHandler.detectedOnsetTime,
-      () => this.audioHandler.lastSoundTime,
-    );
+    this.syncPlanner = new PadSyncPlanner({
+      settings: () => this.settings,
+      now: () => this.audioHandler.now(),
+      sources: () => this.referenceSources(),
+      activeCapture: () => this.audioHandler.activeCapture,
+      detectedOnset: () => this.audioHandler.detectedOnsetTime,
+      lastSound: () => this.audioHandler.lastSoundTime,
+    });
 
     effect(() => this.render());
     this.render();
