@@ -71,6 +71,7 @@ export function extractAligned(
   audioContext: AudioContext,
   startOffsetSec: number,
   lengthSamples: number,
+  wrapLeadSamples = 0,
 ): AudioBuffer {
   const rate = buffer.sampleRate;
   const startSample = Math.round(startOffsetSec * rate);
@@ -80,6 +81,16 @@ export function extractAligned(
   if (to > from) {
     for (let c = 0; c < buffer.numberOfChannels; c++) {
       out.copyToChannel(buffer.getChannelData(c).subarray(from, to), c, from - startSample);
+    }
+  }
+
+  const wrapFrom = Math.max(0, startSample - wrapLeadSamples);
+  const wrapTo = Math.min(Math.max(0, startSample), buffer.length);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const src = buffer.getChannelData(c);
+    const dst = out.getChannelData(c);
+    for (let i = wrapFrom; i < wrapTo; i++) {
+      dst[lengthSamples - (startSample - i)] += src[i];
     }
   }
   return out;
