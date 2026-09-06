@@ -100,7 +100,7 @@ const rules: Rule[] = [
 
   {
     from: "playing", event: "loop-end",
-    to: ({ looping }) => looping ? "playing" : "recorded"
+    to: () => "recorded"
   },
 ];
 

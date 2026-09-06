@@ -1,17 +1,31 @@
 import type { ControllerPadEvent, PadEvent, PadState } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
-import type { RecordingAdjustment } from "@/audio-helpers.js";
+import { SYNC_GRACE_TIME } from "@/pad/pad-constants.js";
 
 export type SyncDecision = "immediate" | "wait";
 
-export type LoopBoundarySource = {
-  getNearestLoopBoundary(): number | null;
+export type LoopReference = {
+  originTime: number;
+  cycleSec: number;
+  cycleSamples: number;
+};
+
+export type LoopReferenceSource = {
+  getLoopReference(): LoopReference | null;
+};
+
+export type CaptureWindow = {
+  sync: boolean;
+  ref: LoopReference | null;
+  startBoundary: number | null;
+  endBoundary: number | null;
 };
 
 export type SyncEffects = {
   scheduleReady: (event: ControllerPadEvent, delayMs: number) => void;
-  adjustRecording: (adjustment: RecordingAdjustment) => void;
-  offsetPlayback: (offsetMs: number) => void;
+  beginCapture: (capture: CaptureWindow) => void;
+  endCapture: (endBoundary: number) => void;
+  schedulePlayback: (boundaryTime: number) => void;
 };
 
 export type SyncPlan = {
@@ -21,23 +35,18 @@ export type SyncPlan = {
 
 const NO_SYNC: SyncPlan = { decision: "immediate", apply: () => { } };
 
-function nearestBoundary(sources: LoopBoundarySource[], now: number): number | null {
-  let nearest: number | null = null;
-  for (const source of sources) {
-    const boundary = source.getNearestLoopBoundary();
-    if (boundary === null) continue;
-    if (nearest === null || Math.abs(boundary - now) < Math.abs(nearest - now)) {
-      nearest = boundary;
-    }
-  }
-  return nearest;
+export function nextBoundary(ref: LoopReference, time: number): number {
+  const grace = SYNC_GRACE_TIME / 1000;
+  const cycleIndex = Math.ceil((time - ref.originTime - grace) / ref.cycleSec);
+  return ref.originTime + cycleIndex * ref.cycleSec;
 }
 
 export class PadSyncPlanner {
   constructor(
     private readonly getSettings: () => PadSettings,
     private readonly now: () => number,
-    private readonly getBoundarySources: () => LoopBoundarySource[],
+    private readonly getSources: () => LoopReferenceSource[],
+    private readonly getActiveCapture: () => CaptureWindow | null,
   ) { }
 
   public planFor(state: PadState, event: PadEvent): SyncPlan {
@@ -50,66 +59,73 @@ export class PadSyncPlanner {
     }
   }
 
-  private planRecordStart(): SyncPlan {
-    const settings = this.getSettings();
-    const deltaMs = settings.recordSyncStart
-      ? this.boundaryDeltaMs(settings.recordSyncStartThresholdMs)
-      : null;
+  private findReference(): LoopReference | null {
+    for (const source of this.getSources()) {
+      const ref = source.getLoopReference();
+      if (ref) return ref;
+    }
+    return null;
+  }
 
-    if (deltaMs !== null && deltaMs > 0) {
+  private planRecordStart(): SyncPlan {
+    const sync = this.getSettings().sync;
+    const ref = sync ? this.findReference() : null;
+    if (!ref) {
       return {
-        decision: "wait",
-        apply: (effects) => effects.scheduleReady("ready-to-record", deltaMs),
+        decision: "immediate",
+        apply: (effects) => effects.beginCapture({ sync, ref: null, startBoundary: null, endBoundary: null }),
       };
     }
 
-    const prependMs = deltaMs === null ? 0 : -deltaMs;
-    return {
-      decision: "immediate",
-      apply: (effects) => effects.adjustRecording({ prependMs, appendMs: 0, trimEndMs: 0 }),
-    };
+    const now = this.now();
+    const startBoundary = nextBoundary(ref, now);
+    const capture: CaptureWindow = { sync, ref, startBoundary, endBoundary: null };
+    if (startBoundary > now) {
+      return {
+        decision: "wait",
+        apply: (effects) => {
+          effects.beginCapture(capture);
+          effects.scheduleReady("ready-to-record", (startBoundary - now) * 1000);
+        },
+      };
+    }
+    return { decision: "immediate", apply: (effects) => effects.beginCapture(capture) };
   }
 
   private planRecordEnd(): SyncPlan {
-    const settings = this.getSettings();
-    const deltaMs = settings.recordSyncEnd
-      ? this.boundaryDeltaMs(settings.recordSyncEndThresholdMs)
-      : null;
+    const capture = this.getActiveCapture();
+    if (!capture?.ref) return NO_SYNC;
 
-    const appendMs = deltaMs !== null && deltaMs > 0 ? deltaMs : 0;
-    const trimEndMs = deltaMs !== null && deltaMs <= 0 ? -deltaMs : 0;
-    return {
-      decision: "immediate",
-      apply: (effects) => effects.adjustRecording({ prependMs: 0, appendMs, trimEndMs }),
-    };
+    const now = this.now();
+    const endBoundary = nextBoundary(capture.ref, now);
+    if (endBoundary > now) {
+      return {
+        decision: "wait",
+        apply: (effects) => {
+          effects.endCapture(endBoundary);
+          effects.scheduleReady("ready-to-end-recording", (endBoundary - now) * 1000);
+        },
+      };
+    }
+    return { decision: "immediate", apply: (effects) => effects.endCapture(endBoundary) };
   }
 
   private planPlayStart(): SyncPlan {
-    const settings = this.getSettings();
-    const deltaMs = settings.playSyncStart
-      ? this.boundaryDeltaMs(settings.playSyncStartThresholdMs)
-      : null;
+    if (!this.getSettings().sync) return NO_SYNC;
+    const ref = this.findReference();
+    if (!ref) return NO_SYNC;
 
-    if (deltaMs !== null && deltaMs > 0) {
+    const now = this.now();
+    const startBoundary = nextBoundary(ref, now);
+    if (startBoundary > now) {
       return {
         decision: "wait",
-        apply: (effects) => effects.scheduleReady("ready-to-play", deltaMs),
+        apply: (effects) => {
+          effects.schedulePlayback(startBoundary);
+          effects.scheduleReady("ready-to-play", (startBoundary - now) * 1000);
+        },
       };
     }
-
-    const offsetMs = deltaMs === null ? 0 : -deltaMs;
-    return {
-      decision: "immediate",
-      apply: (effects) => effects.offsetPlayback(offsetMs),
-    };
-  }
-
-  private boundaryDeltaMs(thresholdMs: number): number | null {
-    const now = this.now();
-    const boundary = nearestBoundary(this.getBoundarySources(), now);
-    if (boundary === null) return null;
-
-    const deltaMs = (boundary - now) * 1000;
-    return Math.abs(deltaMs) > thresholdMs ? null : deltaMs;
+    return { decision: "immediate", apply: (effects) => effects.schedulePlayback(startBoundary) };
   }
 }

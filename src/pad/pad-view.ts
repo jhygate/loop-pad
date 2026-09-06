@@ -29,6 +29,7 @@ export type PadViewProps = {
   settings: PadSettings;
   audioLength: number | null;
   audioPlayed: number | null;
+  playbackStart: number | null;
 };
 
 export class PadViewHandler {
@@ -40,7 +41,7 @@ export class PadViewHandler {
 
   private renderedIcon = "";
   private deleteBarVisible = false;
-  private lastAudioPlayed: number | null = null;
+  private lastPlaybackStart: number | null = null;
 
   constructor(htmlElement: HTMLElement) {
     htmlElement.innerHTML = `
@@ -67,7 +68,7 @@ export class PadViewHandler {
     this.renderIcon(props.state, props.settingsPressed);
     this.renderLooping(props.looping, props.settings.loopable);
     this.renderDeleteBar(props.holdStartTime, props.state);
-    this.renderProgress(props.audioLength, props.audioPlayed);
+    this.renderProgress(props.audioLength, props.audioPlayed, props.playbackStart);
   }
 
   private renderIcon(state: PadState, settingsPressed: boolean) {
@@ -104,20 +105,21 @@ export class PadViewHandler {
     this.deleteBarElement.hidden = false;
   }
 
-  private renderProgress(audioLength: number | null, audioPlayed: number | null) {
-    if (audioLength === null || audioPlayed === null) {
-      if (this.lastAudioPlayed !== null) this.progressElement.style.animation = "";
-      this.lastAudioPlayed = null;
+  private renderProgress(audioLength: number | null, audioPlayed: number | null, playbackStart: number | null) {
+    if (audioLength === null || audioPlayed === null || playbackStart === null) {
+      if (this.lastPlaybackStart !== null) {
+        this.progressElement.style.animation = "";
+        this.lastPlaybackStart = null;
+      }
       return;
     }
 
-    const restarted = this.lastAudioPlayed === null || audioPlayed < this.lastAudioPlayed;
-    this.lastAudioPlayed = audioPlayed;
-    if (!restarted) return;
+    if (playbackStart === this.lastPlaybackStart) return;
+    this.lastPlaybackStart = playbackStart;
 
-    this.progressElement.style.setProperty("--start", `${100 * audioPlayed / audioLength}%`);
     this.progressElement.style.animation = "none";
     void this.progressElement.offsetHeight;
-    this.progressElement.style.animation = `progressFill ${audioLength - audioPlayed}s linear forwards`;
+    this.progressElement.style.animation = `progressFill ${audioLength}s linear infinite`;
+    this.progressElement.style.animationDelay = `-${audioPlayed}s`;
   }
 }

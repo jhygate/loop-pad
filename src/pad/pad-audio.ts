@@ -1,6 +1,7 @@
 import { PadState, ControllerPadEvent } from "@/pad/pad-state-machine.js";
 import type { PadSettings } from "@/pad/pad.js";
-import { trimBuffer, computeMaxGain, adjustRecording, type TrimOptions, type RecordingAdjustment } from "@/audio-helpers.js";
+import type { CaptureWindow, LoopReference } from "@/pad/pad-sync.js";
+import { trimBuffer, computeMaxGain, extractAligned, type TrimOptions } from "@/audio-helpers.js";
 
 export class PadAudioHandler {
   private readonly mediaRecorder: MediaRecorder;
@@ -13,8 +14,11 @@ export class PadAudioHandler {
   private sourceNode: AudioBufferSourceNode | null = null;
   private playStartTime: number | null = null;
   private _maxGain = 1;
-  private pendingRecordingAdjustment: RecordingAdjustment = { prependMs: 0, appendMs: 0, trimEndMs: 0 };
-  private pendingPlaybackOffsetMs = 0;
+  private looping = true;
+  private capture: CaptureWindow | null = null;
+  private recorderStartTime: number | null = null;
+  private cycleSamples: number | null = null;
+  private scheduledPlaybackPending = false;
 
   constructor(
     stream: MediaStream,
@@ -48,6 +52,7 @@ export class PadAudioHandler {
       case "empty":
         this.deleteRecording();
         break;
+      case "waiting-to-record":
       case "recording":
         this.startRecording();
         break;
@@ -58,14 +63,29 @@ export class PadAudioHandler {
         this.stopPlaying();
         break;
       case "playing":
-        this.startPlaying();
+        if (this.scheduledPlaybackPending) this.scheduledPlaybackPending = false;
+        else this.startPlaying();
         break;
     }
   }
 
+  public beginCapture(capture: CaptureWindow) {
+    this.capture = capture;
+  }
+
+  public endCapture(endBoundary: number) {
+    if (this.capture) this.capture.endBoundary = endBoundary;
+  }
+
+  public get activeCapture(): CaptureWindow | null {
+    return this.capture;
+  }
+
   public startRecording() {
+    if (this.mediaRecorder.state === "recording") return;
     this.chunks = [];
     this.wireRecordSources();
+    this.recorderStartTime = this.audioContext.currentTime;
     this.mediaRecorder.start();
   }
 
@@ -98,9 +118,21 @@ export class PadAudioHandler {
       const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType });
       const arrayBuffer = await blob.arrayBuffer();
       const buffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      const trimmed = trimBuffer(buffer, this.audioContext, this.trimOptions());
-      this.audioBuffer = adjustRecording(trimmed, this.audioContext, this.pendingRecordingAdjustment);
-      this.pendingRecordingAdjustment = { prependMs: 0, appendMs: 0, trimEndMs: 0 };
+      const capture = this.capture;
+      if (
+        capture?.ref &&
+        capture.startBoundary !== null &&
+        capture.endBoundary !== null &&
+        this.recorderStartTime !== null
+      ) {
+        const cycles = Math.max(1, Math.round((capture.endBoundary - capture.startBoundary) / capture.ref.cycleSec));
+        const startOffsetSec = capture.startBoundary - this.recorderStartTime;
+        this.audioBuffer = extractAligned(buffer, this.audioContext, startOffsetSec, cycles * capture.ref.cycleSamples);
+        this.cycleSamples = capture.ref.cycleSamples;
+      } else {
+        this.audioBuffer = trimBuffer(buffer, this.audioContext, this.trimOptions());
+        this.cycleSamples = capture?.sync ? this.audioBuffer.length : null;
+      }
       this._maxGain = computeMaxGain(this.audioBuffer);
     } catch (e) {
       console.error("recording decode failed", e);
@@ -109,23 +141,41 @@ export class PadAudioHandler {
     }
   }
 
-  public async startPlaying() {
+  public setLooping(looping: boolean) {
+    this.looping = looping;
+    if (this.sourceNode) this.sourceNode.loop = looping;
+  }
+
+  public schedulePlayback(boundaryTime: number) {
     if (!this.audioBuffer) return;
-
-    await this.audioContext.resume();
-
+    void this.audioContext.resume();
     this.stopSource();
+    const now = this.audioContext.currentTime;
+    const offsetSec = boundaryTime < now
+      ? Math.min(now - boundaryTime, this.audioBuffer.duration)
+      : 0;
+    this.startSource(Math.max(boundaryTime, now), offsetSec, boundaryTime);
+    this.scheduledPlaybackPending = true;
+  }
 
-    const offsetSec = Math.min(this.pendingPlaybackOffsetMs / 1000, this.audioBuffer.duration);
-    this.pendingPlaybackOffsetMs = 0;
+  public startPlaying() {
+    if (!this.audioBuffer) return;
+    void this.audioContext.resume();
+    this.stopSource();
+    this.startSource(0, 0, this.audioContext.currentTime);
+  }
 
+  private startSource(when: number, offsetSec: number, claimedStartTime: number) {
     this.sourceNode = this.audioContext.createBufferSource();
     this.sourceNode.buffer = this.audioBuffer;
+    this.sourceNode.loop = this.looping;
     this.sourceNode.connect(this.gainNode);
-    this.sourceNode.start(0, offsetSec);
-    this.playStartTime = this.audioContext.currentTime - offsetSec;
+    this.sourceNode.start(when, offsetSec);
+    this.playStartTime = claimedStartTime;
 
     this.sourceNode.onended = () => {
+      this.sourceNode = null;
+      this.playStartTime = null;
       this.onControllerEvent('loop-end');
     };
 
@@ -139,6 +189,8 @@ export class PadAudioHandler {
   private deleteRecording() {
     this.stopSource();
     this.audioBuffer = null;
+    this.cycleSamples = null;
+    this.capture = null;
     this._maxGain = 1;
   }
 
@@ -149,6 +201,7 @@ export class PadAudioHandler {
     }
     this.sourceNode = null;
     this.playStartTime = null;
+    this.scheduledPlaybackPending = false;
   }
 
   private trimOptions(): TrimOptions {
@@ -165,8 +218,23 @@ export class PadAudioHandler {
   }
 
   public get playbackElapsed(): number | null {
-    if (this.playStartTime === null) return null;
-    return this.audioContext.currentTime - this.playStartTime;
+    if (this.playStartTime === null || !this.audioBuffer) return null;
+    const elapsed = this.audioContext.currentTime - this.playStartTime;
+    if (elapsed < 0) return null;
+    return elapsed % this.audioBuffer.duration;
+  }
+
+  public get playbackStart(): number | null {
+    return this.playStartTime;
+  }
+
+  public get loopReference(): LoopReference | null {
+    if (this.playStartTime === null || this.cycleSamples === null) return null;
+    return {
+      originTime: this.playStartTime,
+      cycleSec: this.cycleSamples / this.audioContext.sampleRate,
+      cycleSamples: this.cycleSamples,
+    };
   }
 
   public setVolume(v: number) {
@@ -179,22 +247,5 @@ export class PadAudioHandler {
 
   public now(): number {
     return this.audioContext.currentTime;
-  }
-
-  public nearestBoundary(): number | null {
-    if (this.playStartTime === null || !this.audioBuffer) return null;
-    const duration = this.audioBuffer.duration;
-    if (duration <= 0) return null;
-    const elapsed = this.audioContext.currentTime - this.playStartTime;
-    const loopIndex = Math.round(elapsed / duration);
-    return this.playStartTime + loopIndex * duration;
-  }
-
-  public setRecordingAdjustment(adjustment: RecordingAdjustment) {
-    this.pendingRecordingAdjustment = adjustment;
-  }
-
-  public setPlaybackOffsetMs(ms: number) {
-    this.pendingPlaybackOffsetMs = ms;
   }
 }

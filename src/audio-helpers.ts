@@ -66,31 +66,21 @@ export function trimBuffer(
   return trimmed;
 }
 
-export type RecordingAdjustment = {
-  prependMs: number;
-  appendMs: number;
-  trimEndMs: number;
-};
-
-export function adjustRecording(
+export function extractAligned(
   buffer: AudioBuffer,
   audioContext: AudioContext,
-  adj: RecordingAdjustment,
+  startOffsetSec: number,
+  lengthSamples: number,
 ): AudioBuffer {
-  if (adj.prependMs === 0 && adj.appendMs === 0 && adj.trimEndMs === 0) return buffer;
-
   const rate = buffer.sampleRate;
-  const prepend = Math.max(0, Math.floor(adj.prependMs / 1000 * rate));
-  const append = Math.max(0, Math.floor(adj.appendMs / 1000 * rate));
-  const trimEnd = Math.max(0, Math.floor(adj.trimEndMs / 1000 * rate));
-  const kept = Math.max(0, buffer.length - trimEnd);
-  const newLength = prepend + kept + append;
-  if (newLength <= 0) return buffer;
-
-  const out = audioContext.createBuffer(buffer.numberOfChannels, newLength, rate);
-  for (let c = 0; c < buffer.numberOfChannels; c++) {
-    const src = buffer.getChannelData(c);
-    out.copyToChannel(src.subarray(0, kept), c, prepend);
+  const startSample = Math.round(startOffsetSec * rate);
+  const out = audioContext.createBuffer(buffer.numberOfChannels, lengthSamples, rate);
+  const from = Math.max(0, startSample);
+  const to = Math.min(buffer.length, startSample + lengthSamples);
+  if (to > from) {
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+      out.copyToChannel(buffer.getChannelData(c).subarray(from, to), c, from - startSample);
+    }
   }
   return out;
 }

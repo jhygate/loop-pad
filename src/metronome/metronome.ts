@@ -1,3 +1,5 @@
+import type { LoopReference } from "@/pad/pad-sync.js";
+
 const LOOKAHEAD_MS = 25;
 const SCHEDULE_AHEAD_SEC = 0.1;
 const CLICK_DURATION_SEC = 0.05;
@@ -7,6 +9,7 @@ const CLICK_PEAK_GAIN = 0.3;
 export class Metronome {
   private bpm: number;
   private beatsPerBar: number;
+  private barSamples: number;
   private _startTime: number | null = null;
   private nextBeatIndex = 0;
   private schedulerTimerId = -1;
@@ -19,6 +22,11 @@ export class Metronome {
   ) {
     this.bpm = bpm;
     this.beatsPerBar = beatsPerBar;
+    this.barSamples = this.computeBarSamples();
+  }
+
+  private computeBarSamples(): number {
+    return Math.max(1, Math.round(this.audioContext.sampleRate * (60 / this.bpm) * this.beatsPerBar));
   }
 
   public get isRunning(): boolean {
@@ -38,7 +46,7 @@ export class Metronome {
   }
 
   public get barDurationSec(): number {
-    return (60 / this.bpm) * this.beatsPerBar;
+    return this.barSamples / this.audioContext.sampleRate;
   }
 
   public start() {
@@ -62,12 +70,14 @@ export class Metronome {
   public setBpm(bpm: number) {
     if (bpm <= 0 || !Number.isFinite(bpm)) return;
     this.bpm = bpm;
+    this.barSamples = this.computeBarSamples();
     this.restartIfRunning();
   }
 
   public setBeatsPerBar(n: number) {
     if (n <= 0 || !Number.isFinite(n) || !Number.isInteger(n)) return;
     this.beatsPerBar = n;
+    this.barSamples = this.computeBarSamples();
     this.restartIfRunning();
   }
 
@@ -77,17 +87,18 @@ export class Metronome {
     this.start();
   }
 
-  public getNearestLoopBoundary(): number | null {
+  public getLoopReference(): LoopReference | null {
     if (!this._isRunning || this._startTime === null) return null;
-    const barSec = this.barDurationSec;
-    const elapsed = this.audioContext.currentTime - this._startTime;
-    const barIndex = Math.round(elapsed / barSec);
-    return this._startTime + barIndex * barSec;
+    return {
+      originTime: this._startTime,
+      cycleSec: this.barDurationSec,
+      cycleSamples: this.barSamples,
+    };
   }
 
   private tick = () => {
     if (!this._isRunning || this._startTime === null) return;
-    const beatSec = 60 / this.bpm;
+    const beatSec = this.barDurationSec / this.beatsPerBar;
     const horizon = this.audioContext.currentTime + SCHEDULE_AHEAD_SEC;
 
     while (true) {

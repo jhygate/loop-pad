@@ -13,12 +13,7 @@ type SettingsField =
 
 const FIELDS: SettingsField[] = [
   { kind: "checkbox", name: "loopable", label: "Loopable" },
-  { kind: "checkbox", name: "recordSyncStart", label: "Record sync start" },
-  { kind: "number", name: "recordSyncStartThresholdMs", label: "Record sync start threshold (ms)", step: 10, min: 0 },
-  { kind: "checkbox", name: "recordSyncEnd", label: "Record sync end" },
-  { kind: "number", name: "recordSyncEndThresholdMs", label: "Record sync end threshold (ms)", step: 10, min: 0 },
-  { kind: "checkbox", name: "playSyncStart", label: "Play sync start" },
-  { kind: "number", name: "playSyncStartThresholdMs", label: "Play sync start threshold (ms)", step: 10, min: 0 },
+  { kind: "checkbox", name: "sync", label: "Sync" },
   {
     kind: "select", name: "playingPressBehavior", label: "Play behavior",
     options: [{ value: "stop", label: "Stop" }, { value: "restart", label: "Restart" }],

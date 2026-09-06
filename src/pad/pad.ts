@@ -12,7 +12,8 @@ import { PadAudioHandler } from "@/pad/pad-audio.js";
 import { PadUserInputHandler } from "@/pad/pad-user-input.js";
 import {
   PadSyncPlanner,
-  type LoopBoundarySource,
+  type LoopReference,
+  type LoopReferenceSource,
   type SyncDecision,
   type SyncEffects,
 } from "@/pad/pad-sync.js";
@@ -20,13 +21,8 @@ import type { Metronome } from "@/metronome/metronome.js";
 
 
 export type PadSettings = {
-  recordSyncStart: boolean;
-  recordSyncStartThresholdMs: number;
-  recordSyncEnd: boolean;
-  recordSyncEndThresholdMs: number;
+  sync: boolean;
   playingPressBehavior: "stop" | "restart";
-  playSyncStart: boolean;
-  playSyncStartThresholdMs: number;
   loopable: boolean;
   audioThreshold: number;
   thresholdStart: boolean;
@@ -52,12 +48,7 @@ export type PadContext = {
 
 
 const DEFAULT_SETTINGS: PadSettings = {
-  recordSyncStart: false,
-  recordSyncStartThresholdMs: 150,
-  recordSyncEnd: false,
-  recordSyncEndThresholdMs: 150,
-  playSyncStart: false,
-  playSyncStartThresholdMs: 150,
+  sync: true,
   playingPressBehavior: "stop",
   loopable: true,
   audioThreshold: 0,
@@ -79,8 +70,9 @@ export class Pad {
 
   private readonly syncEffects: SyncEffects = {
     scheduleReady: (event, delayMs) => this.scheduleReady(event, delayMs),
-    adjustRecording: (adjustment) => this.audioHandler.setRecordingAdjustment(adjustment),
-    offsetPlayback: (offsetMs) => this.audioHandler.setPlaybackOffsetMs(offsetMs),
+    beginCapture: (capture) => this.audioHandler.beginCapture(capture),
+    endCapture: (endBoundary) => this.audioHandler.endCapture(endBoundary),
+    schedulePlayback: (boundaryTime) => this.audioHandler.schedulePlayback(boundaryTime),
   };
 
   private settings: PadSettings = { ...DEFAULT_SETTINGS };
@@ -115,7 +107,8 @@ export class Pad {
     this.syncPlanner = new PadSyncPlanner(
       () => this.settings,
       () => this.audioHandler.now(),
-      () => this.boundarySources(),
+      () => this.referenceSources(),
+      () => this.audioHandler.activeCapture,
     );
 
     effect(() => this.render());
@@ -141,6 +134,7 @@ export class Pad {
   public setSettings(updated: PadSettings) {
     this.settings = updated;
     if (!updated.loopable) this.stateMachine.disableLooping();
+    this.audioHandler.setLooping(this.looping);
     this.audioHandler.setVolume(updated.volume);
     this.render();
   }
@@ -167,10 +161,12 @@ export class Pad {
       syncDecision: plan.decision,
     };
 
+    const prevState = this.state;
     this.stateMachine.transition(event, padContext);
     this.stateSignal.value = this.state;
+    this.audioHandler.setLooping(this.looping);
 
-    this.clearPendingSyncTimer();
+    if (this.state !== prevState) this.clearPendingSyncTimer();
     plan.apply(this.syncEffects);
 
     if (event !== "double-press") {
@@ -193,15 +189,18 @@ export class Pad {
     }
   }
 
-  private boundarySources(): LoopBoundarySource[] {
-    const sources: LoopBoundarySource[] = Object.values(this.peers).filter(peer => peer !== this);
+  private referenceSources(): LoopReferenceSource[] {
+    const sources: LoopReferenceSource[] = [];
     if (this.metronome) sources.push(this.metronome);
+    for (const peer of Object.values(this.peers)) {
+      if (peer !== this) sources.push(peer);
+    }
     return sources;
   }
 
-  public getNearestLoopBoundary(): number | null {
-    if (this.state !== "playing" || !this.looping) return null;
-    return this.audioHandler.nearestBoundary();
+  public getLoopReference(): LoopReference | null {
+    if (this.state !== "playing" || !this.looping || !this.settings.sync) return null;
+    return this.audioHandler.loopReference;
   }
 
   public render() {
@@ -214,6 +213,7 @@ export class Pad {
       settings: this.settings,
       audioLength: this.audioHandler.recordingDuration,
       audioPlayed: this.audioHandler.playbackElapsed,
+      playbackStart: this.audioHandler.playbackStart,
     });
   }
 }
